@@ -1,11 +1,11 @@
 #!/usr/bin/python
-# (c) Christopher Olah <colah@xelerance.com>, 2011. Xelerance.
+# (c) Christopher Olah <colah@xelerance.com>, 2011. Xelerance <http://www.xelerance.com/>.
 
 """ Easy DNS (including DNSSEC) via ldns.
 
 In many respects, ldns is a great library. It is a powerfull tool for working with DNS. Unfortunatly, while it has python bindings, they are deeply lacking -- a thin, incomplete wrapper around the C library. The documentation is incomplete, functions don't work as described, some objects don't a full python API. Furthermore, it is a straight up clone of the C interface, which often isn't a very good interface for python. All this leads to a difficult to use library.
 
-ldnsx aims to fix this. It wraps around the ldns python bindings, working around its limitations and providing a more pythonistic interface.
+ldnsx aims to fix this. It wraps around the ldns python bindings, working around its limitations and providing a well-documented, more pythonistic interface.
 
 EXAMPLES:
 
@@ -27,18 +27,44 @@ UNIT TESTS:
 
 Writing unit tests for a DNS library is somewhat tricky since results generally depend on web servers, but here are a few:
 
->>> res   =   resolver("192.168.1.1")
+>>> import ldnsx
+>>> res = ldnsx.resolver("192.168.1.1")
 >>> res.add_nameserver("192.168.1.2")
 >>> res.add_nameserver("192.168.1.3")
->>> res.nameservers()
+>>> res.nameservers_ip()
 ["192.168.1.1","192.168.1.2","192.168.1.3"]
 
 """
 
-
-import ldns
-import re
 import time
+try:
+	import ipcalc
+except ImportError:
+	print >> sys.stderr, "ldnsx requires the python-ipcalc"
+	print >> sys.stderr, "Fedora/CentOS: yum install python-ipcalc"
+	print >> sys.stderr, "Debian/Ubuntu: apt-get install python-ipcalc"
+	print >> sys.stderr, "openSUSE: zypper in python-ipcalc"
+	sys.exit(1)
+try:
+	import ldns
+except ImportError:
+	print >> sys.stderr, "ldnsx requires the ldns-python sub-package from http://www.nlnetlabs.nl/projects/ldns/"
+	print >> sys.stderr, "Fedora/CentOS: yum install ldns-python"
+	print >> sys.stderr, "Debian/Ubuntu: apt-get install python-ldns"
+	print >> sys.stderr, "openSUSE: zypper in python-ldns"
+	sys.exit(1)
+
+def isValidIP(ipaddr):
+	try:
+		bits = len(ipcalc.IP(ipaddr).bin())
+	except:
+		return 0
+	if bits == 32:
+		return 4
+	elif bits == 128:
+		return 6
+	else:
+		return 0
 
 _dns_types={
 	"A"    : ldns.LDNS_RR_TYPE_A,
@@ -111,41 +137,33 @@ _dns_types={
 class resolver:
 	""" A wrapper around ldns.ldns_resolver. """
 	
-	def __init__(self, ns = ""):
+	def __init__(self, ns = None):
 		"""resolver constructor
 			
-			  * ns -- the nameserver, defaults to settings from /etc/resolv.conf
+			  * ns -- the nameserver/comma delimited nameserver list
+			          defaults to settings from /etc/resolv.conf
 
 			EXAMPLES:
 
-			> resolver("193.110.157.135")
-			> resolver("f.root-servers.net")
+			> resolver() # from /etc/resolv.conf
+			> resolver("") # resolver with no nameservers
+			> resolver("193.110.157.135") #resolver pointing to ip addr
+			> resolver("f.root-servers.net") # resolver pointing ip address(es) resolved from name
+			> resolver("193.110.157.135, 193.110.157.136") 
+			> # resolver pointing to multiple ip addr, first takes precedence.
 
 			"""
-		if ns == "":
-			self._ldns_resolver = ldns.ldns_resolver.new_frm_file("/etc/resolv.conf")
-		elif re.match("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",ns):
-			self._ldns_resolver = ldns.ldns_resolver.new_frm_file("/etc/resolv.conf")
+		# We construct based on a file and dump the nameservers rather than using
+		# ldns_resolver_new() to avoid environment/configuration/magic specific 
+		# bugs.
+		self._ldns_resolver = ldns.ldns_resolver.new_frm_file("/etc/resolv.conf")
+		if ns != None:
 			self.drop_nameservers()
-			self.add_nameserver(ns)
-		else:
-			# The following only works on some machines, so we don't use it.
-			# (Despite having the same version of ldns and freinds)
-			#> default_resolver = resolver()
-			#> self._ldns_resolver = ldns.ldns_resolver_new()
-			#> address = default_resolver._ldns_resolver.get_addr_by_name(ns)
-			#> self._ldns_resolver.push_nameserver_rr_list(address)
-			# Instead we do the following, as in sshfp dane
-			resolver = ldns.ldns_resolver.new_frm_file("/etc/resolv.conf")
-			address = resolver.get_addr_by_name(ns)
-			while resolver.pop_nameserver():
-				pass
-			for rr in address.rrs():
-				resolver.push_nameserver_rr(rr)
-			self._ldns_resolver=resolver
-			# This approach didn't work by constructing with ldns_resolver_new()
-			# and then pushing rrs on some computers. It seems one _must_ use 
-			# new_frm_file, pop, and then push.
+			nm_list = ns.split(',')
+			nm_list.reverse()
+			for nm in nm_list:
+				self.add_nameserver(nm)
+
 	
 	def query(self, name, dns_type, dns_class="IN", tries = 1):
 		"""Run a query on the resolver.
@@ -180,6 +198,9 @@ class resolver:
 			For information on what they are, refer to 
 			https://secure.wikimedia.org/wikipedia/en/wiki/List_of_DNS_record_types
 
+			Note that these are record types supported by the resolver. It is possible that
+			the nameserver might not support them.
+
 		"""
 		return _dns_types.keys()
 	
@@ -189,6 +210,7 @@ class resolver:
 			This function is a generator. As it AXFRs it will yield you the records.
 
 		"""
+		#Dname seems to be unecessary on some computers, but it is on others. Avoid bugs.
 		if self._ldns_resolver.axfr_start(ldns.ldns_dname(name), ldns.LDNS_RR_CLASS_IN) != ldns.LDNS_STATUS_OK:
 			raise Exception("Starting AXFR failed. Error: %s" % ldns.ldns_get_errorstr_by_id(status))
 		pres = self._ldns_resolver.axfr_next()
@@ -196,7 +218,7 @@ class resolver:
 			yield (str(pres.owner()),pres.ttl(),pres.get_class_str(),pres.get_type_str())
 			pres = self._ldns_resolver.axfr_next()
 
-	def nameservers(self):
+	def nameservers_ip(self):
 		""" returns a list of the resolvers nameservers (as IP addr)
 		
 		"""
@@ -214,22 +236,37 @@ class resolver:
 
 
 	def add_nameserver(self,ns):
-		""" NOT FULLY IMPLEMENTED YET"""
-		pass
-		if re.match("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}",ns):
-			address = ldns.ldns_rdf_new_frm_str(5,ns)
+		""" Add a nameserver, IPv4/IPv6/name.
+
+		"""
+		if isValidIP(ns) == 4:
+			address = ldns.ldns_rdf_new_frm_str(ldns.LDNS_RDF_TYPE_A,ns)
+			self._ldns_resolver.push_nameserver(address)
+		elif isValidIP(ns) == 6:
+			address = ldns.ldns_rdf_new_frm_str(ldns.LDNS_RDF_TYPE_AAAA,ns)
 			self._ldns_resolver.push_nameserver(address)
 		else:
-			raise Exception("push nameserver has not yet implemented pushing names")
+			resolver = ldns.ldns_resolver.new_frm_file("/etc/resolv.conf")
+			address = resolver.get_addr_by_name(ns)
+			if not address:
+				raise Exception("Failed to resolve address")
+			for rr in address.rrs():
+				self._ldns_resolver.push_nameserver_rr(rr)
 
 	def drop_nameservers(self):
 		"""Drops all nameservers.
 			This function causes the resolver to forget all nameservers.
+
 		"""
 		while self._ldns_resolver.pop_nameserver():
 			pass
 
+	def set_nameservers(self, nm_list):
+		self.drop_nameservers()
+		for nm in nm_list:
+			self.add_nameserver(nm)
+
 	def __repr__(self):
-		return "<resolver: %s>" % repr(self.nameservers())[1:-1]
+		return "<resolver: %s>" % ", ".join(self.nameservers_ip())
 
 
