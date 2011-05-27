@@ -36,7 +36,7 @@ Writing unit tests for a DNS library is somewhat tricky since results generally 
 
 """
 
-import time
+import time, sys
 try:
 	import ipcalc
 except ImportError:
@@ -137,7 +137,7 @@ _dns_types={
 class resolver:
 	""" A wrapper around ldns.ldns_resolver. """
 	
-	def __init__(self, ns = None):
+	def __init__(self, ns = None, dnssec=False):
 		"""resolver constructor
 			
 			  * ns -- the nameserver/comma delimited nameserver list
@@ -163,6 +163,7 @@ class resolver:
 			nm_list.reverse()
 			for nm in nm_list:
 				self.add_nameserver(nm)
+		self.set_dnssec(dnssec)
 
 	
 	def query(self, name, dns_type, dns_class="IN", tries = 1):
@@ -187,10 +188,11 @@ class resolver:
 		if not pkt:
 			time.sleep(1)
 			return self.query(name, dns_type, dns_class=dns_class, tries = tries-1) 
-		ret = []
-		for rr in pkt.answer().rrs():
-			ret.append([str(rr.owner()),rr.ttl(),rr.get_class_str(),rr.get_type_str()]+[str(rdf) for rdf in rr.rdfs()])
-		return ret
+		return packet(pkt)
+		#ret = []
+		#for rr in pkt.answer().rrs():
+		#	ret.append([str(rr.owner()),rr.ttl(),rr.get_class_str(),rr.get_type_str()]+[str(rdf) for rdf in rr.rdfs()])
+		#return ret
 	
 	def suported_DNS_types(self):
 		""" Returns the supported DNS record types.
@@ -215,7 +217,7 @@ class resolver:
 			raise Exception("Starting AXFR failed. Error: %s" % ldns.ldns_get_errorstr_by_id(status))
 		pres = self._ldns_resolver.axfr_next()
 		while pres:
-			yield (str(pres.owner()),pres.ttl(),pres.get_class_str(),pres.get_type_str())
+			yield resource_record(pres)
 			pres = self._ldns_resolver.axfr_next()
 
 	def nameservers_ip(self):
@@ -268,5 +270,44 @@ class resolver:
 
 	def __repr__(self):
 		return "<resolver: %s>" % ", ".join(self.nameservers_ip())
+	__str__ = __repr__
+
+	def set_dnssec(self,new_dnssec_status):
+		self._ldns_resolver.set_dnssec(new_dnssec_status)
+
+
+class packet:
+	def __init__(self, pkt):
+		self._ldns_pkt = pkt
+	def __repr__(self):
+		return str(self._ldns_pkt)
+	__str__ = __repr__
+	def rcode(self):
+		return self._ldns_pkt.rcode2str()
+	def flags(self):
+		ret = []
+		if self._ldns_pkt.aa(): ret.append("aa")
+		if self._ldns_pkt.ad(): ret.append("ad")
+		if self._ldns_pkt.cd(): ret.append("cd")
+		if self._ldns_pkt.qr(): ret.append("qr")
+		if self._ldns_pkt.ra(): ret.append("ra")
+		if self._ldns_pkt.rd(): ret.append("rd")
+		if self._ldns_pkt.tc(): ret.append("tc")
+		return ret
+	def answer(self):
+		return [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
+		
+
+class resource_record:
+	def __init__(self, rr):
+		self._ldns_rr = rr
+	def __repr__(self):
+		return str(self._ldns_rr)
+	__str__ = __repr__
+	def owner(self):
+		return str(self._ldns_rr.owner())
+	def dns_type(self):
+		return self._ldns_rr.get_type_str()
+	
 
 
