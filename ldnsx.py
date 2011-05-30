@@ -11,17 +11,17 @@ EXAMPLES:
 
 Ask the default nameserver for the A resource records for google.com
 
-> import ldnsx
-> resolver = ldnsx.resolver()
-> for rr in resolver.query("google.com","A"):
->     print rr
+>>> import ldnsx
+>>> resolver = ldnsx.resolver()
+>>> for rr in resolver.query("google.com","A"):
+>>>     print rr
 
 Ask f.root-servers.net for the DS records for .com:
 
-> import ldnsx
-> resolver = ldnsx.resolver("f.root-servers.net")
-> for rr in resolver.query("com.","DS"):
->     print rr
+>>> import ldnsx
+>>> resolver = ldnsx.resolver("f.root-servers.net")
+>>> for rr in resolver.query("com.","DS"):
+>>>     print rr
 
 UNIT TESTS:
 
@@ -66,7 +66,7 @@ def isValidIP(ipaddr):
 	else:
 		return 0
 
-_dns_types={
+_rr_types={
 	"A"    : ldns.LDNS_RR_TYPE_A,
 	"A6"   : ldns.LDNS_RR_TYPE_A6,
 	"AAAA" : ldns.LDNS_RR_TYPE_AAAA,
@@ -145,12 +145,12 @@ class resolver:
 
 			EXAMPLES:
 
-			> resolver() # from /etc/resolv.conf
-			> resolver("") # resolver with no nameservers
-			> resolver("193.110.157.135") #resolver pointing to ip addr
-			> resolver("f.root-servers.net") # resolver pointing ip address(es) resolved from name
-			> resolver("193.110.157.135, 193.110.157.136") 
-			> # resolver pointing to multiple ip addr, first takes precedence.
+			>>> resolver() # from /etc/resolv.conf
+			>>> resolver("") # resolver with no nameservers
+			>>> resolver("193.110.157.135") #resolver pointing to ip addr
+			>>> resolver("f.root-servers.net") # resolver pointing ip address(es) resolved from name
+			>>> resolver("193.110.157.135, 193.110.157.136") 
+			>>> # resolver pointing to multiple ip addr, first takes precedence.
 
 			"""
 		# We construct based on a file and dump the nameservers rather than using
@@ -166,45 +166,46 @@ class resolver:
 		self.set_dnssec(dnssec)
 
 	
-	def query(self, name, dns_type, dns_class="IN", tries = 1):
+	def query(self, name, rr_type, dns_class="IN", tries = 1):
 		"""Run a query on the resolver.
 			
 			  * name -- name to query for
-			  * dns_type -- the record type to query for (see suported_DNS_types)
+			  * rr_type -- the record type to query for (see suported_rr_types)
 			  * dns_class -- the class to query for, defaults to IN (Internet)
 			  * tries -- the number of times to attempt to acheive query in case of packet loss, etc
 
 			EXAMPLE:
 
-			> for rr in resolver.query("google.com","A")
-			>     print rr
+			>>> for rr in resolver.query("google.com","A")
+			>>>     print rr
 
 
 		"""
-		if not dns_type in _dns_types.keys():
+		if not rr_type in _rr_types.keys():
 			raise Exception("Unknown DNS Record Type")
 		if tries == 0: return None
-		pkt = self._ldns_resolver.query(name, _dns_types[dns_type], ldns.LDNS_RR_CLASS_IN)
+		pkt = self._ldns_resolver.query(name, _rr_types[rr_type], ldns.LDNS_RR_CLASS_IN)
 		if not pkt:
 			time.sleep(1)
-			return self.query(name, dns_type, dns_class=dns_class, tries = tries-1) 
+			return self.query(name, rr_type, dns_class=dns_class, tries = tries-1) 
 		return packet(pkt)
 		#ret = []
 		#for rr in pkt.answer().rrs():
 		#	ret.append([str(rr.owner()),rr.ttl(),rr.get_class_str(),rr.get_type_str()]+[str(rdf) for rdf in rr.rdfs()])
 		#return ret
 	
-	def suported_DNS_types(self):
-		""" Returns the supported DNS record types.
+	def suported_rr_types(self):
+		""" Returns the supported DNS resource record types.
 
-			For information on what they are, refer to 
+			Refer to http://www.iana.org/assignments/dns-parameters
+			section Resource Record (RR) TYPEs or to
 			https://secure.wikimedia.org/wikipedia/en/wiki/List_of_DNS_record_types
 
 			Note that these are record types supported by the resolver. It is possible that
 			the nameserver might not support them.
 
 		"""
-		return _dns_types.keys()
+		return _rr_types.keys()
 	
 	def AXFR(self,name):
 		"""AXFR for name
@@ -277,37 +278,112 @@ class resolver:
 
 
 class packet:
+	
 	def __init__(self, pkt):
 		self._ldns_pkt = pkt
+	
 	def __repr__(self):
 		return str(self._ldns_pkt)
 	__str__ = __repr__
+	
 	def rcode(self):
+		"""Returns the rcode.
+
+		Example returned value: "NOERROR"
+
+		possilbe rcodes (via ldns): "FORMERR", "MASK", "NOERROR",
+		"NOTAUTH", "NOTIMPL", "NOTZONE", "NXDOMAIN",
+		"NXRSET", "REFUSED", "SERVFAIL", "SHIFT", 
+		"YXDOMAIN", "YXRRSET"
+
+		Refer to http://www.iana.org/assignments/dns-parameters
+		section: DNS RCODEs
+		"""
 		return self._ldns_pkt.rcode2str()
+
+	def opcode(self):
+		"""Returns the rcode.
+
+		Example returned value: "QUERY"
+
+		"""
+		return self._ldns_pkt.opcode2str()
+	
 	def flags(self):
-		ret = []
-		if self._ldns_pkt.aa(): ret.append("aa")
-		if self._ldns_pkt.ad(): ret.append("ad")
-		if self._ldns_pkt.cd(): ret.append("cd")
-		if self._ldns_pkt.qr(): ret.append("qr")
-		if self._ldns_pkt.ra(): ret.append("ra")
-		if self._ldns_pkt.rd(): ret.append("rd")
-		if self._ldns_pkt.tc(): ret.append("tc")
-		return ret
-	def answer(self):
-		return [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
+		"""Return packet flags (as list of strings).
 		
+		Example returned value: ['QR', 'RA', 'RD']
+		
+		From http://www.iana.org/assignments/dns-parameters:
+
+		>  Bit       Flag  Description            Reference
+		>  --------  ----  ---------------------  ---------
+		>  bit 5     AA    Authoritative Answer   [RFC1035]
+		>  bit 6     TC    Truncated Response     [RFC1035]
+		>  bit 7     RD    Recursion Desired      [RFC1035]
+		>  bit 8     RA    Recursion Allowed      [RFC1035]
+		>  bit 9           Reserved
+		>  bit 10    AD    Authentic Data         [RFC4035]
+		>  bit 11    CD    Checking Disabled      [RFC4035]
+
+		There is also QR. It is mentioned in other sources,
+		though not the above page. It being false means that
+		the packet is a query, it being true means that it is
+		a response.
+
+		"""
+		ret = []
+		if self._ldns_pkt.aa(): ret.append("AA")
+		if self._ldns_pkt.ad(): ret.append("AD")
+		if self._ldns_pkt.cd(): ret.append("CD")
+		if self._ldns_pkt.qr(): ret.append("QR")
+		if self._ldns_pkt.ra(): ret.append("RA")
+		if self._ldns_pkt.rd(): ret.append("RD")
+		if self._ldns_pkt.tc(): ret.append("TC")
+		return ret
+
+	def answer(self):
+		"""Returns the answer section.
+		"""
+		return [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
+
+	def authority(self):
+		"""Returns the authority section.
+		"""
+		return [resource_record(rr) for rr in self._ldns_pkt.auhtority().rrs()]
+
+	def additional(self):
+		"""Returns the additional section.
+		"""
+		return [resource_record(rr) for rr in self._ldns_pkt.additional().rrs()]
+
+	def question(self):
+		"""Returns the question section.
+		"""
+		return [resource_record(rr) for rr in self._ldns_pkt.question().rrs()]
 
 class resource_record:
 	def __init__(self, rr):
 		self._ldns_rr = rr
+	
 	def __repr__(self):
 		return str(self._ldns_rr)
+	
 	__str__ = __repr__
+	
 	def owner(self):
 		return str(self._ldns_rr.owner())
-	def dns_type(self):
+	
+	def rr_type(self):
 		return self._ldns_rr.get_type_str()
+	
+	def ip(self):
+		if self.rr_type() in ["A", "AAAA"]:
+			return str(self._ldns_rr.rdfs().next())
+		else:
+			#raise Exception("ldnsx does not support ip for records other than A/AAAA")
+			return "" #More convenient as an interface, in practice
+
 	
 
 
