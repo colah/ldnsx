@@ -7,7 +7,8 @@ In many respects, ldns is a great library. It is a powerfull tool for working wi
 
 ldnsx aims to fix this. It wraps around the ldns python bindings, working around its limitations and providing a well-documented, more pythonistic interface.
 
-EXAMPLES:
+Examples
+========
 
 Ask the default nameserver for the A resource records for google.com
 
@@ -23,7 +24,8 @@ Ask f.root-servers.net for the DS records for .com:
 >>> for rr in resolver.query("com.","DS"):
 >>>     print rr
 
-UNIT TESTS:
+Unite Tests
+===========
 
 Writing unit tests for a DNS library is somewhat tricky since results generally depend on web servers, but here are a few:
 
@@ -53,6 +55,8 @@ except ImportError:
 	print >> sys.stderr, "Debian/Ubuntu: apt-get install python-ldns"
 	print >> sys.stderr, "openSUSE: zypper in python-ldns"
 	sys.exit(1)
+
+__version__ = "-0.5"
 
 def isValidIP(ipaddr):
 	try:
@@ -143,7 +147,8 @@ class resolver:
 			  * ns -- the nameserver/comma delimited nameserver list
 			          defaults to settings from /etc/resolv.conf
 
-			EXAMPLES:
+			Examples
+			========
 
 			>>> resolver() # from /etc/resolv.conf
 			>>> resolver("") # resolver with no nameservers
@@ -166,28 +171,42 @@ class resolver:
 		self.set_dnssec(dnssec)
 
 	
-	def query(self, name, rr_type, dns_class="IN", tries = 1):
+	def query(self, name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
 		"""Run a query on the resolver.
 			
 			  * name -- name to query for
 			  * rr_type -- the record type to query for (see suported_rr_types)
-			  * dns_class -- the class to query for, defaults to IN (Internet)
+			  * rr_class -- the class to query for, defaults to IN (Internet)
 			  * tries -- the number of times to attempt to acheive query in case of packet loss, etc
 
-			EXAMPLE:
+			Examples
+			========
 
 			>>> for rr in resolver.query("google.com","A")
 			>>>     print rr
 
 
 		"""
+		if   rr_class == "IN": _rr_class = ldns.LDNS_RR_CLASS_IN 
+		elif rr_class == "CH": _rr_class = ldns.LDNS_RR_CLASS_CH
+		elif rr_class == "HS": _rr_class = ldns.LDNS_RR_CLASS_HS
+		else:
+			raise Exception("ldnsx (version %s) does not support the RR class %s." % (__version__, str(rr_class)) ) 
 		if not rr_type in _rr_types.keys():
-			raise Exception("Unknown DNS Record Type")
+			raise Exception("ldnsx (version %s) does not support the RR type %s."  % (__version__, str(rr_type)) ) 
+		_flags = 0
+		if "QR" in flags: _flags |= ldns.LDNS_QR
+		if "AA" in flags: _flags |= ldns.LDNS_AA
+		if "TC" in flags: _flags |= ldns.LDNS_TC
+		if "RD" in flags: _flags |= ldns.LDNS_RD
+		if "CD" in flags: _flags |= ldns.LDNS_CD
+		if "RA" in flags: _flags |= ldns.LDNS_RA
+		if "AD" in flags: _flags |= ldns.LDNS_AD
 		if tries == 0: return None
-		pkt = self._ldns_resolver.query(name, _rr_types[rr_type], ldns.LDNS_RR_CLASS_IN)
+		pkt = self._ldns_resolver.query(name, _rr_types[rr_type], _rr_class, _flags)
 		if not pkt:
 			time.sleep(1)
-			return self.query(name, rr_type, dns_class=dns_class, tries = tries-1) 
+			return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
 		return packet(pkt)
 		#ret = []
 		#for rr in pkt.answer().rrs():
@@ -314,17 +333,19 @@ class packet:
 		
 		Example returned value: ['QR', 'RA', 'RD']
 		
-		From http://www.iana.org/assignments/dns-parameters:
+		 ========  ====  =====================  =========
+		 Bit       Flag  Description            Reference
+		 --------  ----  ---------------------  ---------
+		 bit 5     AA    Authoritative Answer   [RFC1035]
+		 bit 6     TC    Truncated Response     [RFC1035]
+		 bit 7     RD    Recursion Desired      [RFC1035]
+		 bit 8     RA    Recursion Allowed      [RFC1035]
+		 bit 9           Reserved
+		 bit 10    AD    Authentic Data         [RFC4035]
+		 bit 11    CD    Checking Disabled      [RFC4035]
+		 ========  ====  =====================  =========
 
-		>  Bit       Flag  Description            Reference
-		>  --------  ----  ---------------------  ---------
-		>  bit 5     AA    Authoritative Answer   [RFC1035]
-		>  bit 6     TC    Truncated Response     [RFC1035]
-		>  bit 7     RD    Recursion Desired      [RFC1035]
-		>  bit 8     RA    Recursion Allowed      [RFC1035]
-		>  bit 9           Reserved
-		>  bit 10    AD    Authentic Data         [RFC4035]
-		>  bit 11    CD    Checking Disabled      [RFC4035]
+		(from http://www.iana.org/assignments/dns-parameters)
 
 		There is also QR. It is mentioned in other sources,
 		though not the above page. It being false means that
