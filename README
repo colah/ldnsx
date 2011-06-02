@@ -1,0 +1,26 @@
+LDNSX: Easy DNS (including DNSSEC) via ldns.
+
+In many respects, ldns is a great library. It is a powerfull tool for working with DNS. Unfortunatly, while it has python bindings, they are deeply lacking -- a thin, incomplete wrapper around the C library. The documentation is incomplete, functions don't work as described, some objects don't a full python API. Furthermore, it is a straight up clone of the C interface, which often isn't a very good interface for python. All this leads to a difficult to use library.
+
+ldnsx aims to fix this. It wraps around the ldns python bindings, working around its limitations and providing a well-documented, more pythonistic interface.
+
+Examples
+========
+
+Query the default resolver for google.com's A records. Print the response packet.
+
+>>> import ldnsx
+>>> resolver = ldnsx.resolver()
+>>> print resolver.query("google.com","A")
+
+Print the NS records for com. from f.root-servers.net if we get a response, else an error message.
+
+>>> import ldnsx
+>>> pkt = ldnsx.resolver("f.root-servers.net").query("com.","NS")
+>>> if pkt:
+>>>    for rr in pkt.answer():
+>>>       print rr
+>>> else:
+>>>    print "response not received" 
+
+

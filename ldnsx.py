@@ -14,17 +14,17 @@ Ask the default nameserver for the A resource records for google.com
 
 >>> import ldnsx
 >>> resolver = ldnsx.resolver()
->>> for rr in resolver.query("google.com","A"):
+>>> for rr in resolver.query("google.com","A").answer():
 >>>     print rr
 
 Ask f.root-servers.net for the DS records for .com:
 
 >>> import ldnsx
 >>> resolver = ldnsx.resolver("f.root-servers.net")
->>> for rr in resolver.query("com.","DS"):
+>>> for rr in resolver.query("com.","DS").answer():
 >>>     print rr
 
-Unite Tests
+Unit Tests
 ===========
 
 Writing unit tests for a DNS library is somewhat tricky since results generally depend on web servers, but here are a few:
@@ -148,7 +148,7 @@ class resolver:
 			          defaults to settings from /etc/resolv.conf
 
 			Examples
-			========
+			
 
 			>>> resolver() # from /etc/resolv.conf
 			>>> resolver("") # resolver with no nameservers
@@ -173,37 +173,71 @@ class resolver:
 	
 	def query(self, name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
 		"""Run a query on the resolver.
-			
+				
 			  * name -- name to query for
-			  * rr_type -- the record type to query for (see suported_rr_types)
+			  * rr_type -- the record type to query for
 			  * rr_class -- the class to query for, defaults to IN (Internet)
+			  * flags -- the flags to send the query with 
 			  * tries -- the number of times to attempt to acheive query in case of packet loss, etc
 
-			Examples
-			========
+			rr_type must be a supported resource record type. There are a large number of RR types:
 
-			>>> for rr in resolver.query("google.com","A")
-			>>>     print rr
+			===========  =============================================  =========
+			TYPE         Value and meaning                              Reference
+			-----------  ---------------------------------------------  ---------
+			A            1 a host address                               [RFC1035]
+			NS           2 an authoritative name server                 [RFC1035]
+			...
+			AAAA         28 IP6 Address                                 [RFC3596]
+			...
+			DS           43 Delegation Signer                           [RFC4034][RFC3658]
+			...
+			DNSKEY       48 DNSKEY                                      [RFC4034][RFC3755]
+			...
+			Unassigned   32770-65279  
+			Private use  65280-65534
+			Reserved     65535 
+			===========  =============================================  =========
+			
+			(Extract from the table at http://www.iana.org/assignments/dns-parameters)
+
+			RR types are given as a string (eg. "A"). In the case of Unassigned/Private use/Reserved ones,
+			they are given as "TYPEXXXXX" where XXXXX is the number. ie. RR type 65280 is "TYPE65280". You 
+			may also pass the integer, but you always be given the string.
+			
+			Examples:
+			
+			>>> google_a_records = resolver.query("google.com","A").answer()
+			>>> dnssec_pkt = ldnsx.resolver(dnssec=True).query("xelerance.com")
 
 
 		"""
+		if rr_type in _rr_types.keys():
+			_rr_type = _rr_types[rr_type]
+		elif isinstance(rr_type,int):
+			_rr_type = rr_type
+		elif isinstance(rr_type,str) and rr_type[0:4] == "TYPE":
+			try:
+				_rr_type = int(rr_type[4:])
+			except:
+				raise Exception("%s is a bad RR type. TYPEXXXX: XXXX must be a number")
+		else:
+			raise Exception("ldnsx (version %s) does not support the RR type %s."  % (__version__, str(rr_type)) ) 
 		if   rr_class == "IN": _rr_class = ldns.LDNS_RR_CLASS_IN 
 		elif rr_class == "CH": _rr_class = ldns.LDNS_RR_CLASS_CH
 		elif rr_class == "HS": _rr_class = ldns.LDNS_RR_CLASS_HS
 		else:
 			raise Exception("ldnsx (version %s) does not support the RR class %s." % (__version__, str(rr_class)) ) 
-		if not rr_type in _rr_types.keys():
-			raise Exception("ldnsx (version %s) does not support the RR type %s."  % (__version__, str(rr_type)) ) 
 		_flags = 0
-		if "QR" in flags: _flags |= ldns.LDNS_QR
-		if "AA" in flags: _flags |= ldns.LDNS_AA
-		if "TC" in flags: _flags |= ldns.LDNS_TC
-		if "RD" in flags: _flags |= ldns.LDNS_RD
-		if "CD" in flags: _flags |= ldns.LDNS_CD
-		if "RA" in flags: _flags |= ldns.LDNS_RA
-		if "AD" in flags: _flags |= ldns.LDNS_AD
+		if "QR" in flags:  _flags |= ldns.LDNS_QR
+		if "AA" in flags:  _flags |= ldns.LDNS_AA
+		if "TC" in flags:  _flags |= ldns.LDNS_TC
+		if "RD" in flags:  _flags |= ldns.LDNS_RD
+		if "CD" in flags:  _flags |= ldns.LDNS_CD
+		if "RA" in flags:  _flags |= ldns.LDNS_RA
+		if "AD" in flags:  _flags |= ldns.LDNS_AD
 		if tries == 0: return None
-		pkt = self._ldns_resolver.query(name, _rr_types[rr_type], _rr_class, _flags)
+		pkt = self._ldns_resolver.query(name, _rr_type, _rr_class, _flags)
 		if not pkt:
 			time.sleep(1)
 			return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
@@ -230,6 +264,13 @@ class resolver:
 		"""AXFR for name
 			
 			This function is a generator. As it AXFRs it will yield you the records.
+
+			Example:
+			Let's get a list of the tlds (gotta catch em all!):
+			>>> tlds = []
+			>>> for rr in resolver("f.root-servers.net").AXFR("."):
+			>>>    if rr.rr_type() == "NS":
+			>>>       tlds.append(rr.owner())
 
 		"""
 		#Dname seems to be unecessary on some computers, but it is on others. Avoid bugs.
@@ -284,6 +325,9 @@ class resolver:
 			pass
 
 	def set_nameservers(self, nm_list):
+		"""Takes a list of nameservers and sets the resolver to use them
+		
+		"""
 		self.drop_nameservers()
 		for nm in nm_list:
 			self.add_nameserver(nm)
@@ -293,10 +337,26 @@ class resolver:
 	__str__ = __repr__
 
 	def set_dnssec(self,new_dnssec_status):
+		"""Set whether the resolver uses DNSSEC.
+		
+		"""
 		self._ldns_resolver.set_dnssec(new_dnssec_status)
 
 
 class packet:
+	
+	def _construct_rr_filter(self, **kwds):
+		def f(rr):
+			ret = True
+			for key in kwds.keys():
+				if key == "rr_type":
+					ret &= rr.rr_type() == kwds[key]
+				elif key == "owner":
+					ret &= rr.owner() == kwds[key]
+				else:
+					raise Exception("ldnsx (version %s) does not recognize the rr field %s" % (__version__,key) ) 
+			return ret
+		return f
 	
 	def __init__(self, pkt):
 		self._ldns_pkt = pkt
@@ -311,7 +371,7 @@ class packet:
 		Example returned value: "NOERROR"
 
 		possilbe rcodes (via ldns): "FORMERR", "MASK", "NOERROR",
-		"NOTAUTH", "NOTIMPL", "NOTZONE", "NXDOMAIN",
+f		"NOTAUTH", "NOTIMPL", "NOTZONE", "NXDOMAIN",
 		"NXRSET", "REFUSED", "SERVFAIL", "SHIFT", 
 		"YXDOMAIN", "YXRRSET"
 
@@ -332,6 +392,8 @@ class packet:
 		"""Return packet flags (as list of strings).
 		
 		Example returned value: ['QR', 'RA', 'RD']
+
+		What are the flags?
 		
 		 ========  ====  =====================  =========
 		 Bit       Flag  Description            Reference
@@ -363,34 +425,60 @@ class packet:
 		if self._ldns_pkt.tc(): ret.append("TC")
 		return ret
 
-	def answer(self):
+	def answer(self, **filters):
 		"""Returns the answer section.
 		"""
-		return [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
+		ret =  [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
+		return filter(self._construct_rr_filter(**filters), ret)
 
-	def authority(self):
+	def authority(self, **filters):
 		"""Returns the authority section.
 		"""
-		return [resource_record(rr) for rr in self._ldns_pkt.auhtority().rrs()]
+		ret = [resource_record(rr) for rr in self._ldns_pkt.authority().rrs()]
+		return filter(self._construct_rr_filter(**filters), ret)
 
-	def additional(self):
+	def additional(self, **filters):
 		"""Returns the additional section.
 		"""
-		return [resource_record(rr) for rr in self._ldns_pkt.additional().rrs()]
+		ret = [resource_record(rr) for rr in self._ldns_pkt.additional().rrs()]
+		return filter(self._construct_rr_filter(**filters), ret)
 
-	def question(self):
+	def question(self, **filters):
 		"""Returns the question section.
 		"""
-		return [resource_record(rr) for rr in self._ldns_pkt.question().rrs()]
+		ret = [resource_record(rr) for rr in self._ldns_pkt.question().rrs()]
+		return filter(self._construct_rr_filter(**filters), ret)
 
 class resource_record:
+	
+	_rdfs = None
+	_iter_pos = None
+	
 	def __init__(self, rr):
 		self._ldns_rr = rr
+		self._rdfs = [str(rr.owner()),rr.ttl(),rr.get_class_str(),rr.get_type_str()]+[str(rdf) for rdf in rr.rdfs()]
 	
 	def __repr__(self):
 		return str(self._ldns_rr)
 	
 	__str__ = __repr__
+
+	def __iter__(self):
+		self._iter_pos = 0
+		return self
+
+	def next(self):
+		if self._iter_pos < len(self._rdfs):
+			self._iter_pos += 1
+			return self._rdfs[self._iter_pos-1]
+		else:
+			raise StopIteration
+
+	def __getitem__(self, n):
+		return self._rdfs[n]
+
+	#def rdfs(self):
+	#	return self._rdfs.clone()
 	
 	def owner(self):
 		return str(self._ldns_rr.owner())
@@ -398,13 +486,19 @@ class resource_record:
 	def rr_type(self):
 		return self._ldns_rr.get_type_str()
 	
+	def rr_class(self):
+		return self._ldns_rr.get_class_str()
+	
+	def ttl(self):
+		return self._ldns_rr.ttl()
+
 	def ip(self):
 		if self.rr_type() in ["A", "AAAA"]:
-			return str(self._ldns_rr.rdfs().next())
+			return self[4]
 		else:
 			#raise Exception("ldnsx does not support ip for records other than A/AAAA")
 			return "" #More convenient as an interface, in practice
 
 	
 
-
+ 
