@@ -30,7 +30,7 @@ if pkt and pkt.answer():
 
    # SERVFAIL indicated bogus name
    if pkt.rcode() == "SERVFAIL":
-      print name, "is bogus"
+      print name, "failed to resolve"
 
    # Check AD (Authenticated) bit
    if pkt.rcode() == "NOERROR":
