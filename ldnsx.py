@@ -3,38 +3,37 @@
 
 """ Easy DNS (including DNSSEC) via ldns.
 
-In many respects, ldns is a great library. It is a powerfull tool for working with DNS. Unfortunatly, while it has python bindings, they are deeply lacking -- a thin, incomplete wrapper around the C library. The documentation is incomplete, functions don't work as described, some objects don't a full python API. Furthermore, it is a straight up clone of the C interface, which often isn't a very good interface for python. All this leads to a difficult to use library.
+ldns is a great library. It is a powerfull tool for
+working with DNS. python-ldns it is a straight up clone of the C
+interface, howver that is not a very good interface for python. Its
+documentation is incomplete and some functions don't work as
+described. And some objects don't have a full python API.
 
-ldnsx aims to fix this. It wraps around the ldns python bindings, working around its limitations and providing a well-documented, more pythonistic interface.
+ldnsx aims to fix this. It wraps around the ldns python bindings,
+working around its limitations and providing a well-documented, more
+pythonistic interface.
 
 Examples
-========
+--------
 
-Ask the default nameserver for the A resource records for google.com
+uery the default resolver for google.com's A records. Print the response
+packet.
 
 >>> import ldnsx
 >>> resolver = ldnsx.resolver()
->>> for rr in resolver.query("google.com","A").answer():
->>>     print rr
+>>> print resolver.query("google.com","A")
 
-Ask f.root-servers.net for the DS records for .com:
 
->>> import ldnsx
->>> resolver = ldnsx.resolver("f.root-servers.net")
->>> for rr in resolver.query("com.","DS").answer():
->>>     print rr
-
-Unit Tests
-===========
-
-Writing unit tests for a DNS library is somewhat tricky since results generally depend on web servers, but here are a few:
+Print the root NS records from f.root-servers.net; if we get a
+response, else an error message.
 
 >>> import ldnsx
->>> res = ldnsx.resolver("192.168.1.1")
->>> res.add_nameserver("192.168.1.2")
->>> res.add_nameserver("192.168.1.3")
->>> res.nameservers_ip()
-["192.168.1.1","192.168.1.2","192.168.1.3"]
+>>> pkt = ldnsx.resolver("f.root-servers.net").query(".", "NS")
+>>> if pkt:
+>>>    for rr in pkt.answer():
+>>>       print rr
+>>> else:
+>>>    print "response not received" 
 
 """
 
@@ -144,11 +143,13 @@ class resolver:
 	def __init__(self, ns = None, dnssec=False):
 		"""resolver constructor
 			
-			  * ns -- the nameserver/comma delimited nameserver list
-			          defaults to settings from /etc/resolv.conf
+			* ns    --  the nameserver/comma delimited nameserver list
+			            defaults to settings from /etc/resolv.conf
+			* dnssec -- should the resolver try and use dnssec or not?
 
-			Examples
-			
+			**Examples**
+
+			Making resolvers is easy!
 
 			>>> resolver() # from /etc/resolv.conf
 			>>> resolver("") # resolver with no nameservers
@@ -156,6 +157,15 @@ class resolver:
 			>>> resolver("f.root-servers.net") # resolver pointing ip address(es) resolved from name
 			>>> resolver("193.110.157.135, 193.110.157.136") 
 			>>> # resolver pointing to multiple ip addr, first takes precedence.
+
+			So is playing around with their nameservers!
+
+			>>> import ldnsx
+			>>> res = ldnsx.resolver("192.168.1.1")
+			>>> res.add_nameserver("192.168.1.2")
+			>>> res.add_nameserver("192.168.1.3")
+			>>> res.nameservers_ip()
+			["192.168.1.1","192.168.1.2","192.168.1.3"]
 
 			"""
 		# We construct based on a file and dump the nameservers rather than using
@@ -174,42 +184,57 @@ class resolver:
 	def query(self, name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
 		"""Run a query on the resolver.
 				
-			  * name -- name to query for
-			  * rr_type -- the record type to query for
-			  * rr_class -- the class to query for, defaults to IN (Internet)
-			  * flags -- the flags to send the query with 
-			  * tries -- the number of times to attempt to acheive query in case of packet loss, etc
+			* name -- name to query for
+			* rr_type -- the record type to query for
+			* rr_class -- the class to query for, defaults to IN (Internet)
+			* flags -- the flags to send the query with 
+			* tries -- the number of times to attempt to acheive query in case of packet loss, etc
+			
+			**Examples**
+			
+			Let's get some A records!
 
+			>>> google_a_records = resolver.query("google.com","A").answer()
+			
+			Using DNSSEC is easy :)
+
+			>>> dnssec_pkt = ldnsx.resolver(dnssec=True).query("xelerance.com")
+			
+			We let you use strings to make things easy, but if you prefer stay close to DNS...
+
+			>>> AAAA = 28
+			>>> resolver.query("ipv6.google.com", AAAA)
+			
+			**More about rr_type**
+			
 			rr_type must be a supported resource record type. There are a large number of RR types:
 
-			===========  =============================================  =========
-			TYPE         Value and meaning                              Reference
-			-----------  ---------------------------------------------  ---------
-			A            1 a host address                               [RFC1035]
-			NS           2 an authoritative name server                 [RFC1035]
+			===========  ===================================  ==================
+			TYPE         Value and meaning                    Reference
+			===========  ===================================  ==================
+			A            1 a host address                     [RFC1035]
+			NS           2 an authoritative name server       [RFC1035]
 			...
-			AAAA         28 IP6 Address                                 [RFC3596]
+			AAAA         28 IP6 Address                       [RFC3596]
 			...
-			DS           43 Delegation Signer                           [RFC4034][RFC3658]
+			DS           43 Delegation Signer                 [RFC4034][RFC3658]
 			...
-			DNSKEY       48 DNSKEY                                      [RFC4034][RFC3755]
+			DNSKEY       48 DNSKEY                            [RFC4034][RFC3755]
 			...
 			Unassigned   32770-65279  
 			Private use  65280-65534
 			Reserved     65535 
-			===========  =============================================  =========
+			===========  ===================================  ==================
 			
-			(Extract from the table at http://www.iana.org/assignments/dns-parameters)
+			(From http://www.iana.org/assignments/dns-parameters)
 
 			RR types are given as a string (eg. "A"). In the case of Unassigned/Private use/Reserved ones,
 			they are given as "TYPEXXXXX" where XXXXX is the number. ie. RR type 65280 is "TYPE65280". You 
 			may also pass the integer, but you always be given the string.
-			
-			Examples:
-			
-			>>> google_a_records = resolver.query("google.com","A").answer()
-			>>> dnssec_pkt = ldnsx.resolver(dnssec=True).query("xelerance.com")
 
+			If the version of ldnsx you are using is old, it is possible that there could be new rr_types that
+			we don't recognise mnemonic for. You can still use the number XXX or the string "TYPEXXX". To
+			determine what rr_type menmonics we support, please refer to resolver.supported_rr_types()
 
 		"""
 		if rr_type in _rr_types.keys():
@@ -250,23 +275,25 @@ class resolver:
 	def suported_rr_types(self):
 		""" Returns the supported DNS resource record types.
 
-			Refer to http://www.iana.org/assignments/dns-parameters
-			section Resource Record (RR) TYPEs or to
-			https://secure.wikimedia.org/wikipedia/en/wiki/List_of_DNS_record_types
+			Refer to resolver.query() for thorough documentation of resource 
+			record types or refer to:
 
-			Note that these are record types supported by the resolver. It is possible that
-			the nameserver might not support them.
+			http://www.iana.org/assignments/dns-parameters
 
 		"""
 		return _rr_types.keys()
 	
 	def AXFR(self,name):
 		"""AXFR for name
+
+			* name -- name to AXFR for
 			
 			This function is a generator. As it AXFRs it will yield you the records.
 
-			Example:
+			**Example**
+
 			Let's get a list of the tlds (gotta catch em all!):
+
 			>>> tlds = []
 			>>> for rr in resolver("f.root-servers.net").AXFR("."):
 			>>>    if rr.rr_type() == "NS":
@@ -371,7 +398,7 @@ class packet:
 		Example returned value: "NOERROR"
 
 		possilbe rcodes (via ldns): "FORMERR", "MASK", "NOERROR",
-f		"NOTAUTH", "NOTIMPL", "NOTZONE", "NXDOMAIN",
+		"NOTAUTH", "NOTIMPL", "NOTZONE", "NXDOMAIN",
 		"NXRSET", "REFUSED", "SERVFAIL", "SHIFT", 
 		"YXDOMAIN", "YXRRSET"
 
@@ -393,19 +420,19 @@ f		"NOTAUTH", "NOTIMPL", "NOTZONE", "NXDOMAIN",
 		
 		Example returned value: ['QR', 'RA', 'RD']
 
-		What are the flags?
+		**What are the flags?**
 		
-		 ========  ====  =====================  =========
-		 Bit       Flag  Description            Reference
-		 --------  ----  ---------------------  ---------
-		 bit 5     AA    Authoritative Answer   [RFC1035]
-		 bit 6     TC    Truncated Response     [RFC1035]
-		 bit 7     RD    Recursion Desired      [RFC1035]
-		 bit 8     RA    Recursion Allowed      [RFC1035]
-		 bit 9           Reserved
-		 bit 10    AD    Authentic Data         [RFC4035]
-		 bit 11    CD    Checking Disabled      [RFC4035]
-		 ========  ====  =====================  =========
+		========  ====  =====================  =========
+		Bit       Flag  Description            Reference
+		========  ====  =====================  =========
+		bit 5     AA    Authoritative Answer   [RFC1035]
+		bit 6     TC    Truncated Response     [RFC1035]
+		bit 7     RD    Recursion Desired      [RFC1035]
+		bit 8     RA    Recursion Allowed      [RFC1035]
+		bit 9           Reserved
+		bit 10    AD    Authentic Data         [RFC4035]
+		bit 11    CD    Checking Disabled      [RFC4035]
+		========  ====  =====================  =========
 
 		(from http://www.iana.org/assignments/dns-parameters)
 
@@ -416,35 +443,133 @@ f		"NOTAUTH", "NOTIMPL", "NOTZONE", "NXDOMAIN",
 
 		"""
 		ret = []
-		if self._ldns_pkt.aa(): ret.append("AA")
-		if self._ldns_pkt.ad(): ret.append("AD")
-		if self._ldns_pkt.cd(): ret.append("CD")
-		if self._ldns_pkt.qr(): ret.append("QR")
-		if self._ldns_pkt.ra(): ret.append("RA")
-		if self._ldns_pkt.rd(): ret.append("RD")
-		if self._ldns_pkt.tc(): ret.append("TC")
+		if self._ldns_pkt.aa(): ret += ["AA"]
+		if self._ldns_pkt.ad(): ret += ["AD"]
+		if self._ldns_pkt.cd(): ret += ["CD"]
+		if self._ldns_pkt.qr(): ret += ["QR"]
+		if self._ldns_pkt.ra(): ret += ["RA"]
+		if self._ldns_pkt.rd(): ret += ["RD"]
+		if self._ldns_pkt.tc(): ret += ["TC"]
 		return ret
 
 	def answer(self, **filters):
 		"""Returns the answer section.
+		
+		* **filters -- a filtering mechanism
+		
+		Since a very common desire is to filter the resource records in a packet
+		section, we provide a special tool for doing this: filters. They are a
+		lot like regular python filters, but more convenient. If you set a 
+		field equal to some value, you will only receive resource records for which
+		it holds true.
+
+		**Examples**
+
+		>>> res = ldnsx.resolver()
+		>>> pkt = res.query("google.ca","A")
+		>>> pkt.answer()
+		[google.ca.     28      IN      A       74.125.91.99
+		, google.ca.    28      IN      A       74.125.91.105
+		, google.ca.    28      IN      A       74.125.91.147
+		, google.ca.    28      IN      A       74.125.91.103
+		, google.ca.    28      IN      A       74.125.91.104
+		, google.ca.    28      IN      A       74.125.91.106
+		]
+
+		To understand filters, comsider the following:
+
+		>>> res = ldnsx.resolver()
+		>>> pkt = res.query("google.ca","ANY")
+		>>> pkt.answer()
+		[google.ca.     284     IN      MX      10 google.com.s9b1.psmtp.com.
+		, google.ca.    284     IN      MX      10 google.com.s9a1.psmtp.com.
+		, google.ca.    284     IN      MX      10 google.com.s9a2.psmtp.com.
+		, google.ca.    284     IN      MX      10 google.com.s9b2.psmtp.com.
+		, google.ca.    4       IN      SOA     ns1.google.com. dns-admin.google.com. 1452303 21600 3600 1209600 300
+		, google.ca.    134530  IN      NS      ns1.google.com.
+		, google.ca.    134530  IN      NS      ns2.google.com.
+		, google.ca.    134530  IN      NS      ns4.google.com.
+		, google.ca.    134530  IN      NS      ns3.google.com.
+		, google.ca.    261     IN      A       74.125.91.103
+		, google.ca.    261     IN      A       74.125.91.99
+		, google.ca.    261     IN      A       74.125.91.147
+		, google.ca.    261     IN      A       74.125.91.105
+		, google.ca.    261     IN      A       74.125.91.106
+		, google.ca.    261     IN      A       74.125.91.104
+		]
+		>>> pkt.answer(rr_type="NS")
+		[google.ca.     134530  IN      NS      ns1.google.com.
+		, google.ca.    134530  IN      NS      ns2.google.com.
+		, google.ca.    134530  IN      NS      ns4.google.com.
+		, google.ca.    134530  IN      NS      ns3.google.com.
+		]
 		"""
 		ret =  [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
 		return filter(self._construct_rr_filter(**filters), ret)
 
 	def authority(self, **filters):
 		"""Returns the authority section.
+
+		* **filters -- a filtering mechanism
+		
+		Since a very common desire is to filter the resource records in a packet
+		section, we provide a special tool for doing this: filters. They are a
+		lot like regular python filters, but more convenient. If you set a 
+		field equal to some value, you will only receive resource records for which
+		it holds true.
+
+		**Examples**
+
+		>>> res = ldnsx.resolver()
+		>>> pkt = res.query("google.ca","A")
+		>>> pkt.authority()
+		[google.ca.     251090  IN      NS      ns3.google.com.
+		, google.ca.    251090  IN      NS      ns1.google.com.
+		, google.ca.    251090  IN      NS      ns2.google.com.
+		, google.ca.    251090  IN      NS      ns4.google.com.
+		]
+
 		"""
 		ret = [resource_record(rr) for rr in self._ldns_pkt.authority().rrs()]
 		return filter(self._construct_rr_filter(**filters), ret)
 
 	def additional(self, **filters):
 		"""Returns the additional section.
+
+		* **filters -- a filtering mechanism
+		
+		Since a very common desire is to filter the resource records in a packet
+		section, we provide a special tool for doing this: filters. They are a
+		lot like regular python filters, but more convenient. If you set a 
+		field equal to some value, you will only receive resource records for which
+		it holds true.
+
+		**Examples**
+
+		>>> res = ldnsx.resolver()
+		>>> pkt = res.query("google.ca","A")
+		>>> pkt.additional()
+		[ns3.google.com.        268778  IN      A       216.239.36.10
+		, ns1.google.com.       262925  IN      A       216.239.32.10
+		, ns2.google.com.       255659  IN      A       216.239.34.10
+		, ns4.google.com.       264489  IN      A       216.239.38.10
+		]
+
 		"""
 		ret = [resource_record(rr) for rr in self._ldns_pkt.additional().rrs()]
 		return filter(self._construct_rr_filter(**filters), ret)
 
 	def question(self, **filters):
 		"""Returns the question section.
+
+		* **filters -- a filtering mechanism
+		
+		Since a very common desire is to filter the resource records in a packet
+		section, we provide a special tool for doing this: filters. They are a
+		lot like regular python filters, but more convenient. If you set a 
+		field equal to some value, you will only receive resource records for which
+		it holds true.
+
 		"""
 		ret = [resource_record(rr) for rr in self._ldns_pkt.question().rrs()]
 		return filter(self._construct_rr_filter(**filters), ret)
