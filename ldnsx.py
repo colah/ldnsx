@@ -138,25 +138,24 @@ _rr_types={
 }
 
 class resolver:
-	""" A wrapper around ldns.ldns_resolver. """
-	
-	def __init__(self, ns = None, dnssec=False):
-		"""resolver constructor
-			
-			* ns    --  the nameserver/comma delimited nameserver list
-			            defaults to settings from /etc/resolv.conf
-			* dnssec -- should the resolver try and use dnssec or not?
+	""" A wrapper around ldns.ldns_resolver. 
 
 			**Examples**
 
 			Making resolvers is easy!
 
+			>>> from ldnsx import resolver
 			>>> resolver() # from /etc/resolv.conf
+			<resolver: 192.168.111.9>
 			>>> resolver("") # resolver with no nameservers
+			<resolver: >
 			>>> resolver("193.110.157.135") #resolver pointing to ip addr
+			<resolver: 193.110.157.135>
 			>>> resolver("f.root-servers.net") # resolver pointing ip address(es) resolved from name
+			<resolver: 2001:500:2f::f, 192.5.5.241>
 			>>> resolver("193.110.157.135, 193.110.157.136") 
 			>>> # resolver pointing to multiple ip addr, first takes precedence.
+			<resolver: 193.110.157.136, 193.110.157.135>
 
 			So is playing around with their nameservers!
 
@@ -167,6 +166,35 @@ class resolver:
 			>>> res.nameservers_ip()
 			["192.168.1.1","192.168.1.2","192.168.1.3"]
 
+			And querying!
+
+			>>> from ldnsx import resolver
+			>>> res= resolver()
+			>>> res.query("cow.com","A")
+			;; ->>HEADER<<- opcode: QUERY, rcode: NOERROR, id: 7663
+			;; flags: qr rd ra ; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0 
+			;; QUESTION SECTION:
+			;; cow.com.     IN      A
+			;; ANSWER SECTION:
+			cow.com.        300     IN      A       208.87.34.18
+			;; AUTHORITY SECTION:
+			;; ADDITIONAL SECTION:
+			;; Query time: 313 msec
+			;; SERVER: 192.168.111.9
+			;; WHEN: Fri Jun  3 11:01:02 2011
+			;; MSG SIZE  rcvd: 41
+
+
+	
+			"""
+	
+	def __init__(self, ns = None, dnssec=False):
+		"""resolver constructor
+			
+			* ns    --  the nameserver/comma delimited nameserver list
+			            defaults to settings from /etc/resolv.conf
+			* dnssec -- should the resolver try and use dnssec or not?
+
 			"""
 		# We construct based on a file and dump the nameservers rather than using
 		# ldns_resolver_new() to avoid environment/configuration/magic specific 
@@ -175,6 +203,8 @@ class resolver:
 		if ns != None:
 			self.drop_nameservers()
 			nm_list = ns.split(',')
+			nm_list = map(lambda s: s.strip(), nm_list)
+			nm_list = filter(lambda s: s != "", nm_list)
 			nm_list.reverse()
 			for nm in nm_list:
 				self.add_nameserver(nm)
