@@ -13,6 +13,10 @@ ldnsx aims to fix this. It wraps around the ldns python bindings,
 working around its limitations and providing a well-documented, more
 pythonistic interface.
 
+**WARNING:** 
+
+**API subject to change.** No backwards compatability guarentee. Write software using this version at your own risk!
+
 Examples
 --------
 
@@ -188,12 +192,13 @@ class resolver:
 	
 			"""
 	
-	def __init__(self, ns = None, dnssec=False):
+	def __init__(self, ns = None, dnssec = False, tcp = False):
 		"""resolver constructor
 			
 			* ns    --  the nameserver/comma delimited nameserver list
 			            defaults to settings from /etc/resolv.conf
 			* dnssec -- should the resolver try and use dnssec or not?
+		    * tcp -- should the resolve try to connect with TCP?
 
 			"""
 		# We construct based on a file and dump the nameservers rather than using
@@ -209,6 +214,7 @@ class resolver:
 			for nm in nm_list:
 				self.add_nameserver(nm)
 		self.set_dnssec(dnssec)
+		self.set_usevc(tcp)
 
 	
 	def query(self, name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
@@ -292,10 +298,16 @@ class resolver:
 		if "RA" in flags:  _flags |= ldns.LDNS_RA
 		if "AD" in flags:  _flags |= ldns.LDNS_AD
 		if tries == 0: return None
-		pkt = self._ldns_resolver.query(name, _rr_type, _rr_class, _flags)
+		try:
+			pkt = self._ldns_resolver.query(name, _rr_type, _rr_class, _flags)
+		except: #Since the ldns exceptiion is not very descriptive...
+			raise Exception("ldns backend ran into problems. Likely, the name you were querying for, %s, was invalid." % name)
 		if not pkt:
-			time.sleep(1)
-			return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
+			if tries <= 1:
+				return None
+			else:
+				time.sleep(1)
+				return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
 		return packet(pkt)
 		#ret = []
 		#for rr in pkt.answer().rrs():
@@ -367,9 +379,12 @@ class resolver:
 			self._ldns_resolver.push_nameserver(address)
 		else:
 			resolver = ldns.ldns_resolver.new_frm_file("/etc/resolv.conf")
-			address = resolver.get_addr_by_name(ns)
+			#address = resolver.get_addr_by_name(ns)
+			address = resolver.get_addr_by_name(ldns.ldns_dname(ns))
 			if not address:
-				raise Exception("Failed to resolve address")
+				address = resolver.get_addr_by_name(ldns.ldns_dname(ns))
+				if not address:
+					raise Exception("Failed to resolve address for %s" % ns)
 			for rr in address.rrs():
 				self._ldns_resolver.push_nameserver_rr(rr)
 
@@ -654,6 +669,4 @@ class resource_record:
 			#raise Exception("ldnsx does not support ip for records other than A/AAAA")
 			return "" #More convenient as an interface, in practice
 
-	
 
- 
