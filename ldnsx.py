@@ -20,7 +20,7 @@ pythonistic interface.
 Examples
 --------
 
-uery the default resolver for google.com's A records. Print the response
+Query the default resolver for google.com's A records. Print the response
 packet.
 
 >>> import ldnsx
