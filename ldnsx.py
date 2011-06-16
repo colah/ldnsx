@@ -192,13 +192,14 @@ class resolver:
 	
 			"""
 	
-	def __init__(self, ns = None, dnssec = False, tcp = False):
+	def __init__(self, ns = None, dnssec = False, tcp = False, port = 53):
 		"""resolver constructor
 			
 			* ns    --  the nameserver/comma delimited nameserver list
 			            defaults to settings from /etc/resolv.conf
 			* dnssec -- should the resolver try and use dnssec or not?
-		    * tcp -- should the resolve try to connect with TCP?
+		    * tcp -- should the resolve try to connect with TCP? 
+		    * port -- the port to use, must be the same for all nameservers
 
 			"""
 		# We construct based on a file and dump the nameservers rather than using
@@ -214,7 +215,8 @@ class resolver:
 			for nm in nm_list:
 				self.add_nameserver(nm)
 		self.set_dnssec(dnssec)
-		self.set_usevc(tcp)
+		self._ldns_resolver.set_usevc(tcp)
+		self._ldns_resolver.set_port(port)
 
 	
 	def query(self, name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
