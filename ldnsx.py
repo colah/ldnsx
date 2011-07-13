@@ -421,15 +421,11 @@ class packet:
 	
 	def _construct_rr_filter(self, **kwds):
 		def f(rr):
-			ret = True
 			for key in kwds.keys():
-				if key == "rr_type":
-					ret &= rr.rr_type() == kwds[key]
-				elif key == "owner":
-					ret &= rr.owner() == kwds[key]
-				else:
-					raise Exception("ldnsx (version %s) does not recognize the rr field %s" % (__version__,key) ) 
-			return ret
+				if ( ( isinstance(kwds[key], list) and str(rr[key]) not in map(str,kwds[key]) )
+				  or ( not isinstance(kwds[key], list) and str(rr[key]) != str(kwds[key]))):
+					return False
+			return True
 		return f
 	
 	def __init__(self, pkt):
@@ -550,6 +546,9 @@ class packet:
 		, google.ca.    134530  IN      NS      ns4.google.com.
 		, google.ca.    134530  IN      NS      ns3.google.com.
 		]
+		
+		fields are the same as when indexing a resource record. 
+		If you want to allow a feild to be multiple values, you may use a list.
 		"""
 		ret =  [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
 		return filter(self._construct_rr_filter(**filters), ret)
@@ -647,7 +646,29 @@ class resource_record:
 			raise StopIteration
 
 	def __getitem__(self, n):
-		return self._rdfs[n]
+		if isinstance(n, int):
+			return self._rdfs[n]
+		elif isinstance(n, str):
+			n = n.lower()
+			if n in ["owner"]:
+				return self.owner()
+			elif n in ["rr_type", "rr type", "type"]:
+				return self.rr_type()
+			elif n in ["rr_class", "rr class", "class"]:
+				return self.rr_class()
+			elif n in ["covered_type", "covered type", "type2"]:
+				return self.covered_type()
+			elif n in ["ttl"]:
+				return self.ttl()
+			elif n in ["ip"]:
+				return self.ip()			
+			elif n in ["alg", "algorithm"]:
+				return self.alg()
+			else:
+				raise Exception("ldnsx (version %s) does not recognize the rr field %s" % (__version__,n) ) 
+		else:
+			raise Exception("bad type %s for index resource record" % type(n) ) 
+			
 
 	#def rdfs(self):
 	#	return self._rdfs.clone()
@@ -657,6 +678,12 @@ class resource_record:
 	
 	def rr_type(self):
 		return self._ldns_rr.get_type_str()
+
+	def covered_type(self):
+		if self.rr_type() == "RRSIG":
+			return self[4]
+		else:
+			return ""
 	
 	def rr_class(self):
 		return self._ldns_rr.get_class_str()
@@ -671,4 +698,13 @@ class resource_record:
 			#raise Exception("ldnsx does not support ip for records other than A/AAAA")
 			return "" #More convenient as an interface, in practice
 
-
+	def alg(self):
+		t = self.rr_type() 
+		if t == "RRSIG":
+			return int(self[5])
+		elif t == "DNSKEY":
+			return int(self[6])
+		elif t == "DS":
+			return int(self[5])
+		else:
+			return -1
