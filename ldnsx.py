@@ -15,7 +15,7 @@ pythonistic interface.
 
 **WARNING:** 
 
-**API subject to change.** No backwards compatability guarentee. Write software using this version at your own risk!
+**API subject to change.** No backwards compatibility guarantee. Write software using this version at your own risk!
 
 Examples
 --------
@@ -41,7 +41,7 @@ response, else an error message.
 
 """
 
-import time, sys
+import time, sys, calendar
 try:
 	import ipcalc
 except ImportError:
@@ -667,7 +667,7 @@ class resource_record:
 			else:
 				raise Exception("ldnsx (version %s) does not recognize the rr field %s" % (__version__,n) ) 
 		else:
-			raise Exception("bad type %s for index resource record" % type(n) ) 
+			raise TypeError("bad type %s for index resource record" % type(n) ) 
 			
 
 	#def rdfs(self):
@@ -690,6 +690,55 @@ class resource_record:
 	
 	def ttl(self):
 		return self._ldns_rr.ttl()
+
+	def inception(self):
+		if self.rr_type() == "RRSIG":
+			return self[9]
+		else:
+			return ""
+
+	def expiration(self):
+		if self.rr_type() == "RRSIG":
+			return self[8]
+		else:
+			return ""
+
+	def inception_unix(self):
+		""" inception field in seconds since the unix epoch
+
+		Something very strange is going on with inception/expiration dates in DNS.
+		According to RFC 4034 section 3.1.5 (http://tools.ietf.org/html/rfc4034#page-9)
+		the inception/expiration fields should be in seconds since Jan 1, 1970, the Unix
+		epoch (as is standard in unix). Yet all the packets I've seen provide UTC encoded
+		as a string instead, eg. "20110712192610" which is 2011/07/12 19:26:10. 
+
+		inception() and expiration() just provide the string and we don't need to worry
+		about it, but that isn't too convenient to work with. So we also want to provide 
+		unix/posix time, ie seconds since the epoch. We want to be able to do this for
+		packets doing it in the defacto mannor and according to the RFC. So we'll check
+		if the string begins with "20" -- this is safe for several decades."""
+
+		if self.rr_type() == "RRSIG":
+			s = self[9]
+			if s[:2] == "20":
+				return calendar.timegm(time.strptime(s, "%Y%m%d%H%M%S"))
+			else:
+				return int(s)
+		else:
+			return -1
+
+	def expiration_unix(self):
+		"""expiration field in seconds since the unix epoch 
+
+		Please refer to inception_unix() for details"""
+		if self.rr_type() == "RRSIG":
+			s = self[8]
+			if s[:2] == "20":
+				return calendar.timegm(time.strptime(s, "%Y%m%d%H%M%S"))
+			else:
+				return int(s)
+		else:
+			return -1
 
 	def ip(self):
 		if self.rr_type() in ["A", "AAAA"]:
