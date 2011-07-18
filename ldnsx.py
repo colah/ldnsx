@@ -664,6 +664,10 @@ class resource_record:
 				return self.ip()			
 			elif n in ["alg", "algorithm"]:
 				return self.alg()
+			elif n in ["protocol"]:
+				return self.protocol()
+			elif n in ["flags"]:
+				return self.flags()
 			else:
 				raise Exception("ldnsx (version %s) does not recognize the rr field %s" % (__version__,n) ) 
 		else:
@@ -691,32 +695,50 @@ class resource_record:
 	def ttl(self):
 		return self._ldns_rr.ttl()
 
-	def inception(self):
+	def inception(self, out_format):
+		"""returns the inception time in format out_format, defaulting to a UTC string. 
+		options for out_format are:
+
+		   UTC -- a UTC string eg. 20110712192610 (2011/07/12 19:26:10) 
+		   unix -- number of seconds since the epoch, Jan 1, 1970
+		   struct_time -- the format used by python's time library
+		"""
+		# Something very strange is going on with inception/expiration dates in DNS.
+		# According to RFC 4034 section 3.1.5 (http://tools.ietf.org/html/rfc4034#page-9)
+		# the inception/expiration fields should be in seconds since Jan 1, 1970, the Unix
+		# epoch (as is standard in unix). Yet all the packets I've seen provide UTC encoded
+		# as a string instead, eg. "20110712192610" which is 2011/07/12 19:26:10. 
+		#
+		# It turns out that this is a standard thing that ldns is doing before the data gets 
+		# to us.
 		if self.rr_type() == "RRSIG":
-			return self[9]
+			if out_format.lower() in ["utc", "utc str", "utc_str"]:
+				return self[9]
+			elif out_format.lower() in ["unix", "posix", "ctime"]:
+				return calendar.timegm(time.strptime(self[9], "%Y%m%d%H%M%S"))
+			elif out_format.lower() in ["struct_time", "time.struct_time"]:
+				return time.strptime(self[9], "%Y%m%d%H%M%S")
+			else:
+				raise Exception "unrecognized time format"
 		else:
 			return ""
 
-	def expiration(self):
+	def expiration(self, out_format="UTC"):
+		"""get expiration time. see inception() for more information"""
 		if self.rr_type() == "RRSIG":
-			return self[8]
+			if out_format.lower() in ["utc", "utc str", "utc_str"]:
+				return self[8]
+			elif out_format.lower() in ["unix", "posix", "ctime"]:
+				return calendar.timegm(time.strptime(self[8], "%Y%m%d%H%M%S"))
+			elif out_format.lower() in ["struct_time", "time.struct_time"]:
+				return time.strptime(self[8], "%Y%m%d%H%M%S")
+			else:
+				raise Exception "unrecognized time format"
 		else:
 			return ""
 
 	def inception_unix(self):
-		""" inception field in seconds since the unix epoch
-
-		Something very strange is going on with inception/expiration dates in DNS.
-		According to RFC 4034 section 3.1.5 (http://tools.ietf.org/html/rfc4034#page-9)
-		the inception/expiration fields should be in seconds since Jan 1, 1970, the Unix
-		epoch (as is standard in unix). Yet all the packets I've seen provide UTC encoded
-		as a string instead, eg. "20110712192610" which is 2011/07/12 19:26:10. 
-
-		inception() and expiration() just provide the string and we don't need to worry
-		about it, but that isn't too convenient to work with. So we also want to provide 
-		unix/posix time, ie seconds since the epoch. We want to be able to do this for
-		packets doing it in the defacto mannor and according to the RFC. So we'll check
-		if the string begins with "20" -- this is safe for several decades."""
+		""" depricated -- use inception("unix")"""
 
 		if self.rr_type() == "RRSIG":
 			s = self[9]
@@ -728,9 +750,7 @@ class resource_record:
 			return -1
 
 	def expiration_unix(self):
-		"""expiration field in seconds since the unix epoch 
-
-		Please refer to inception_unix() for details"""
+		"""depricated -- use expiration("unix") please"""
 		if self.rr_type() == "RRSIG":
 			s = self[8]
 			if s[:2] == "20":
@@ -757,3 +777,25 @@ class resource_record:
 			return int(self[5])
 		else:
 			return -1
+
+	def protocol(self):
+		t = self.rr_type() 
+		if t == "DNSKEY":
+			return int(self[5])
+		else:
+			return -1
+
+	def flags(self):
+		t = self.rr_type() 
+		if t == "DNSKEY":
+			ret = []
+			n = int(self[4])
+			for m in range(1):
+				if 2**(15-m) & n:
+					if   m == 7: ret.append("ZONE")
+					elif m == 8: ret.append("REVOKE")
+					elif m ==15: ret.append("SEP")
+					else:        ret.append(m)
+			return ret
+		else:
+			return []
