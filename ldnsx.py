@@ -41,7 +41,7 @@ response, else an error message.
 
 """
 
-import time, sys, calendar
+import time, sys, calendar, warnings
 try:
 	import ipcalc
 except ImportError:
@@ -315,7 +315,7 @@ class resolver:
 		#for rr in pkt.answer().rrs():
 		#	ret.append([str(rr.owner()),rr.ttl(),rr.get_class_str(),rr.get_type_str()]+[str(rdf) for rdf in rr.rdfs()])
 		#return ret
-	
+
 	def suported_rr_types(self):
 		""" Returns the supported DNS resource record types.
 
@@ -415,6 +415,31 @@ class resolver:
 		
 		"""
 		self._ldns_resolver.set_dnssec(new_dnssec_status)
+
+def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
+	"""Convenience function. Creates a resolver and then queries it. Refer to resolver.query() """
+	res = resolver()
+	return res.query(name, rr_type, rr_class, flags, tries)
+
+def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=False):
+	res = resolver(dnssec=True)
+	pkt = res.query(name, rr_type, rr_class, flags, tries)
+	if pkt.rcode() == "SERVFAIL":
+		raise Exception("%s lookup failed (server error or dnssec validation failed)" % name)
+	if pkt.rcode() == "NXDOMAIN":
+		if "AD" in pkt.flags():
+			raise Exception("%s lookup failed (non-existence proven by DNSSEC)" % hostname )
+		else:
+			raise Exception("%s lookup failed" % hostname )
+	if pkt.rcode() == "NOERROR":
+		if "AD" not in pkt.flags():
+			if flex:
+				raise Exception("DNS lookup was insecure")
+			else:
+				warnings.warn("DNS lookup was insecure")
+		return pkt
+	else:
+		raise Exception("unknown ldns error, %s" % pkt.rcode())
 
 
 class packet:
@@ -695,7 +720,7 @@ class resource_record:
 	def ttl(self):
 		return self._ldns_rr.ttl()
 
-	def inception(self, out_format):
+	def inception(self, out_format="UTC"):
 		"""returns the inception time in format out_format, defaulting to a UTC string. 
 		options for out_format are:
 
@@ -716,10 +741,12 @@ class resource_record:
 				return self[9]
 			elif out_format.lower() in ["unix", "posix", "ctime"]:
 				return calendar.timegm(time.strptime(self[9], "%Y%m%d%H%M%S"))
+			elif out_format.lower() in ["relative"]:
+				return calendar.timegm(time.strptime(self[9], "%Y%m%d%H%M%S")) - time.time()
 			elif out_format.lower() in ["struct_time", "time.struct_time"]:
 				return time.strptime(self[9], "%Y%m%d%H%M%S")
 			else:
-				raise Exception "unrecognized time format"
+				raise Exception("unrecognized time format")
 		else:
 			return ""
 
@@ -730,10 +757,12 @@ class resource_record:
 				return self[8]
 			elif out_format.lower() in ["unix", "posix", "ctime"]:
 				return calendar.timegm(time.strptime(self[8], "%Y%m%d%H%M%S"))
+			elif out_format.lower() in ["relative"]:
+				return calendar.timegm(time.strptime(self[8], "%Y%m%d%H%M%S")) - time.time()
 			elif out_format.lower() in ["struct_time", "time.struct_time"]:
 				return time.strptime(self[8], "%Y%m%d%H%M%S")
 			else:
-				raise Exception "unrecognized time format"
+				raise Exception("unrecognized time format")
 		else:
 			return ""
 
