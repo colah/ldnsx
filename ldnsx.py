@@ -445,10 +445,28 @@ def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=Fal
 class packet:
 	
 	def _construct_rr_filter(self, **kwds):
+		def match(pattern, target):
+			if pattern[0] in ["<",">","!"]:
+				rel = pattern[0]
+				pattern=pattern[1:]
+			elif pattern[0:2] in ["<=","=>"]:
+				rel = pattern[0:2]
+				pattern=pattern[2:]
+			else:
+				rel = "="
+			for val in pattern.split("|"):
+				if {"<" : target <  val,
+				    ">" : target >  val,
+				    "!" : target != val,
+				    "=" : target == val,
+				    ">=": target >= val,
+				    "<=": target <= val}[rel]:
+					return True
+			return False
 		def f(rr):
 			for key in kwds.keys():
 				if ( ( isinstance(kwds[key], list) and str(rr[key]) not in map(str,kwds[key]) )
-				  or ( not isinstance(kwds[key], list) and str(rr[key]) != str(kwds[key]))):
+				  or ( not isinstance(kwds[key], list) and not match(str(kwds[key]), str(rr[key])))):
 					return False
 			return True
 		return f
@@ -573,7 +591,8 @@ class packet:
 		]
 		
 		fields are the same as when indexing a resource record. 
-		If you want to allow a feild to be multiple values, you may use a list.
+		If you want to allow a feild to be multiple values, you may use "A|B|C.."
+		format. Using lists is depricated.
 		"""
 		ret =  [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
 		return filter(self._construct_rr_filter(**filters), ret)
