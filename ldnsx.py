@@ -433,7 +433,7 @@ def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=Fal
 			raise Exception("%s lookup failed" % hostname )
 	if pkt.rcode() == "NOERROR":
 		if "AD" not in pkt.flags():
-			if flex:
+			if not flex:
 				raise Exception("DNS lookup was insecure")
 			else:
 				warnings.warn("DNS lookup was insecure")
