@@ -219,7 +219,7 @@ class resolver:
 		self._ldns_resolver.set_port(port)
 
 	
-	def query(self, name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
+	def query(self, name, rr_type, rr_class="IN", flags=["RD"], tries = 3):
 		"""Run a query on the resolver.
 				
 			* name -- name to query for
@@ -302,6 +302,8 @@ class resolver:
 		if tries == 0: return None
 		try:
 			pkt = self._ldns_resolver.query(name, _rr_type, _rr_class, _flags)
+		except KeyboardInterrupt: #Since so much time is spent waiting on ldns, this is very common place for Ctr-C to fall
+			raise
 		except: #Since the ldns exceptiion is not very descriptive...
 			raise Exception("ldns backend ran into problems. Likely, the name you were querying for, %s, was invalid." % name)
 		if not pkt:
@@ -309,6 +311,7 @@ class resolver:
 				return None
 			else:
 				time.sleep(1)
+				self = resolver( ",".join(self.nameservers_ip()) )
 				return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
 		return packet(pkt)
 		#ret = []
@@ -420,6 +423,22 @@ def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
 	"""Convenience function. Creates a resolver and then queries it. Refer to resolver.query() """
 	res = resolver()
 	return res.query(name, rr_type, rr_class, flags, tries)
+
+def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, **kwds):
+	"""Convenience function. Gets RRs for name of type rr_type trying tries times. 
+	   If strict, it raises and exception on failure, otherwise it returns []. """
+	res = resolver()
+	if "|" in rr_type:
+		pkt = res.query(name, "ANY", rr_class=rr_class, tries=tries)
+	else:
+		pkt = res.query(name, rr_type, rr_class=rr_class, tries=tries)
+	if pkt:
+		return pkt.answer(rr_type=rr_type, **kwds)
+	else:
+		if strict:
+			raise Exception("LDNS couldn't complete query")
+		else:
+			return []
 
 def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=False):
 	res = resolver(dnssec=True)
@@ -812,8 +831,7 @@ class resource_record:
 		if self.rr_type() in ["A", "AAAA"]:
 			return self[4]
 		else:
-			#raise Exception("ldnsx does not support ip for records other than A/AAAA")
-			return "" #More convenient as an interface, in practice
+			raise Exception("ldnsx does not support ip for records other than A/AAAA")
 
 	def alg(self):
 		t = self.rr_type() 
