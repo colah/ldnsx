@@ -669,21 +669,26 @@ class resource_record:
 	#	return self._rdfs.clone()
 	
 	def owner(self):
+		"""Get the RR's owner"""
 		return str(self._ldns_rr.owner())
 	
 	def rr_type(self):
+		"""Get a RR's type """
 		return self._ldns_rr.get_type_str()
 
 	def covered_type(self):
+		"""Get an RRSIG RR's covered type"""
 		if self.rr_type() == "RRSIG":
 			return self[4]
 		else:
 			return ""
 	
 	def rr_class(self):
+		"""Get the RR's collapse"""
 		return self._ldns_rr.get_class_str()
 	
 	def ttl(self):
+		"""Get the RR's TTL"""
 		return self._ldns_rr.ttl()
 
 	def inception(self, out_format="UTC"):
@@ -733,12 +738,14 @@ class resource_record:
 			return ""
 
 	def ip(self):
+		""" IP address form A/AAAA record"""
 		if self.rr_type() in ["A", "AAAA"]:
 			return self[4]
 		else:
 			raise Exception("ldnsx does not support ip for records other than A/AAAA")
 
 	def alg(self):
+		"""Returns algorithm of RRSIG/DNSKEY/DS"""
 		t = self.rr_type() 
 		if t == "RRSIG":
 			return int(self[5])
@@ -750,6 +757,7 @@ class resource_record:
 			return -1
 
 	def protocol(self):
+		""" Returns proticol of the DNSKEY"""
 		t = self.rr_type() 
 		if t == "DNSKEY":
 			return int(self[5])
@@ -757,6 +765,7 @@ class resource_record:
 			return -1
 
 	def flags(self):
+		"""Return RR flags for DNSKEY """
 		t = self.rr_type() 
 		if t == "DNSKEY":
 			ret = []
