@@ -69,15 +69,15 @@ def isValidIP(ipaddr):
 	except:
 		return 0
 
-def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
+def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, res=None):
 	"""Convenience function. Creates a resolver and then queries it. Refer to resolver.query() """
-	res = resolver()
+	res = resolver(res)
 	return res.query(name, rr_type, rr_class, flags, tries)
 
-def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, **kwds):
+def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, res=None, **kwds):
 	"""Convenience function. Gets RRs for name of type rr_type trying tries times. 
 	   If strict, it raises and exception on failure, otherwise it returns []. """
-	res = resolver()
+	res = resolver(res)
 	if "|" in rr_type:
 		pkt = res.query(name, "ANY", rr_class=rr_class, tries=tries)
 	else:
@@ -90,8 +90,8 @@ def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, **kwds):
 		else:
 			return []
 
-def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=False):
-	res = resolver(dnssec=True)
+def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=False, res=None):
+	res = resolver(res, dnssec=True)
 	pkt = res.query(name, rr_type, rr_class, flags, tries)
 	if pkt.rcode() == "SERVFAIL":
 		raise Exception("%s lookup failed (server error or dnssec validation failed)" % name)
@@ -731,29 +731,6 @@ class resource_record:
 				raise Exception("unrecognized time format")
 		else:
 			return ""
-
-	def inception_unix(self):
-		""" depricated -- use inception("unix")"""
-
-		if self.rr_type() == "RRSIG":
-			s = self[9]
-			if s[:2] == "20":
-				return calendar.timegm(time.strptime(s, "%Y%m%d%H%M%S"))
-			else:
-				return int(s)
-		else:
-			return -1
-
-	def expiration_unix(self):
-		"""depricated -- use expiration("unix") please"""
-		if self.rr_type() == "RRSIG":
-			s = self[8]
-			if s[:2] == "20":
-				return calendar.timegm(time.strptime(s, "%Y%m%d%H%M%S"))
-			else:
-				return int(s)
-		else:
-			return -1
 
 	def ip(self):
 		if self.rr_type() in ["A", "AAAA"]:
