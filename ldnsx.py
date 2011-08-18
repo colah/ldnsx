@@ -63,83 +63,54 @@ __version__ = "-0.5"
 
 def isValidIP(ipaddr):
 	try:
+		bits_to_type = { 32 : 4, 128 : 6}
 		bits = len(ipcalc.IP(ipaddr).bin())
+		return bits_to_type[bits]
 	except:
 		return 0
-	if bits == 32:
-		return 4
-	elif bits == 128:
-		return 6
-	else:
-		return 0
 
-_rr_types={
-	"A"    : ldns.LDNS_RR_TYPE_A,
-	"A6"   : ldns.LDNS_RR_TYPE_A6,
-	"AAAA" : ldns.LDNS_RR_TYPE_AAAA,
-	"AFSDB": ldns.LDNS_RR_TYPE_AFSDB,
-	"ANY"  : ldns.LDNS_RR_TYPE_ANY,
-	"APL"  : ldns.LDNS_RR_TYPE_APL,
-	"ATMA" : ldns.LDNS_RR_TYPE_ATMA,
-	"AXFR" : ldns.LDNS_RR_TYPE_AXFR,
-	"CERT" : ldns.LDNS_RR_TYPE_CERT,
-	"CNAME": ldns.LDNS_RR_TYPE_CNAME,
-	"COUNT": ldns.LDNS_RR_TYPE_COUNT,
-	"DHCID": ldns.LDNS_RR_TYPE_DHCID,
-	"DLV"  : ldns.LDNS_RR_TYPE_DLV,
-	"DNAME": ldns.LDNS_RR_TYPE_DNAME,
-	"DNSKEY": ldns.LDNS_RR_TYPE_DNSKEY,
-	"DS"   : ldns.LDNS_RR_TYPE_DS,
-	"EID"  : ldns.LDNS_RR_TYPE_EID,
-	"FIRST": ldns.LDNS_RR_TYPE_FIRST,
-	"GID"  : ldns.LDNS_RR_TYPE_GID,
-	"GPOS" : ldns.LDNS_RR_TYPE_GPOS,
-	"HINFO": ldns.LDNS_RR_TYPE_HINFO,
-	"IPSECKEY": ldns.LDNS_RR_TYPE_IPSECKEY,
-	"ISDN" : ldns.LDNS_RR_TYPE_ISDN,
-	"IXFR" : ldns.LDNS_RR_TYPE_IXFR,
-	"KEY"  : ldns.LDNS_RR_TYPE_KEY,
-	"KX"   : ldns.LDNS_RR_TYPE_KX,
-	"LAST" : ldns.LDNS_RR_TYPE_LAST,
-	"LOC"  : ldns.LDNS_RR_TYPE_LOC,
-	"MAILA": ldns.LDNS_RR_TYPE_MAILA,
-	"MAILB": ldns.LDNS_RR_TYPE_MAILB,
-	"MB"   : ldns.LDNS_RR_TYPE_MB,
-	"MD"   : ldns.LDNS_RR_TYPE_MD,
-	"MF"   : ldns.LDNS_RR_TYPE_MF,
-	"MG"   : ldns.LDNS_RR_TYPE_MG,
-	"MINFO": ldns.LDNS_RR_TYPE_MINFO,
-	"MR"   : ldns.LDNS_RR_TYPE_MR,
-	"MX"   : ldns.LDNS_RR_TYPE_MX,
-	"NAPTR": ldns.LDNS_RR_TYPE_NAPTR,
-	"NIMLOC": ldns.LDNS_RR_TYPE_NIMLOC,
-	"NS"   : ldns.LDNS_RR_TYPE_NS,
-	"NSAP" : ldns.LDNS_RR_TYPE_NSAP,
-	"NSAP_PTR" : ldns.LDNS_RR_TYPE_NSAP_PTR,
-	"NSEC" : ldns.LDNS_RR_TYPE_NSEC,
-	"NSEC3": ldns.LDNS_RR_TYPE_NSEC3,
-	"NSEC3PARAMS" : ldns.LDNS_RR_TYPE_NSEC3PARAMS,
-	"NULL" : ldns.LDNS_RR_TYPE_NULL,
-	"NXT"  : ldns.LDNS_RR_TYPE_NXT,
-	"OPT"  : ldns.LDNS_RR_TYPE_OPT,
-	"PTR"  : ldns.LDNS_RR_TYPE_PTR,
-	"PX"   : ldns.LDNS_RR_TYPE_PX,
-	"RP"   : ldns.LDNS_RR_TYPE_RP,
-	"RRSIG": ldns.LDNS_RR_TYPE_RRSIG,
-	"RT"   : ldns.LDNS_RR_TYPE_RT,
-	"SIG"  : ldns.LDNS_RR_TYPE_SIG,
-	"SINK" : ldns.LDNS_RR_TYPE_SINK,
-	"SOA"  : ldns.LDNS_RR_TYPE_SOA,
-	"SRV"  : ldns.LDNS_RR_TYPE_SRV,
-	"SSHFP": ldns.LDNS_RR_TYPE_SSHFP,
-	"TSIG" : ldns.LDNS_RR_TYPE_TSIG,
-	"TXT"  : ldns.LDNS_RR_TYPE_TXT,
-	"UID"  : ldns.LDNS_RR_TYPE_UID,
-	"UINFO": ldns.LDNS_RR_TYPE_UINFO,
-	"UNSPEC": ldns.LDNS_RR_TYPE_UNSPEC,
-	"WKS"  : ldns.LDNS_RR_TYPE_WKS,
-	"X25"  : ldns.LDNS_RR_TYPE_X25
-}
+def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
+	"""Convenience function. Creates a resolver and then queries it. Refer to resolver.query() """
+	res = resolver()
+	return res.query(name, rr_type, rr_class, flags, tries)
+
+def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, **kwds):
+	"""Convenience function. Gets RRs for name of type rr_type trying tries times. 
+	   If strict, it raises and exception on failure, otherwise it returns []. """
+	res = resolver()
+	if "|" in rr_type:
+		pkt = res.query(name, "ANY", rr_class=rr_class, tries=tries)
+	else:
+		pkt = res.query(name, rr_type, rr_class=rr_class, tries=tries)
+	if pkt:
+		return pkt.answer(rr_type=rr_type, **kwds)
+	else:
+		if strict:
+			raise Exception("LDNS couldn't complete query")
+		else:
+			return []
+
+def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=False):
+	res = resolver(dnssec=True)
+	pkt = res.query(name, rr_type, rr_class, flags, tries)
+	if pkt.rcode() == "SERVFAIL":
+		raise Exception("%s lookup failed (server error or dnssec validation failed)" % name)
+	if pkt.rcode() == "NXDOMAIN":
+		if "AD" in pkt.flags():
+			raise Exception("%s lookup failed (non-existence proven by DNSSEC)" % hostname )
+		else:
+			raise Exception("%s lookup failed" % hostname )
+	if pkt.rcode() == "NOERROR":
+		if "AD" not in pkt.flags():
+			if not flex:
+				raise Exception("DNS lookup was insecure")
+			else:
+				warnings.warn("DNS lookup was insecure")
+		return pkt
+	else:
+		raise Exception("unknown ldns error, %s" % pkt.rcode())
+
+
 
 class resolver:
 	""" A wrapper around ldns.ldns_resolver. 
@@ -419,48 +390,6 @@ class resolver:
 		"""
 		self._ldns_resolver.set_dnssec(new_dnssec_status)
 
-def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1):
-	"""Convenience function. Creates a resolver and then queries it. Refer to resolver.query() """
-	res = resolver()
-	return res.query(name, rr_type, rr_class, flags, tries)
-
-def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, **kwds):
-	"""Convenience function. Gets RRs for name of type rr_type trying tries times. 
-	   If strict, it raises and exception on failure, otherwise it returns []. """
-	res = resolver()
-	if "|" in rr_type:
-		pkt = res.query(name, "ANY", rr_class=rr_class, tries=tries)
-	else:
-		pkt = res.query(name, rr_type, rr_class=rr_class, tries=tries)
-	if pkt:
-		return pkt.answer(rr_type=rr_type, **kwds)
-	else:
-		if strict:
-			raise Exception("LDNS couldn't complete query")
-		else:
-			return []
-
-def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=False):
-	res = resolver(dnssec=True)
-	pkt = res.query(name, rr_type, rr_class, flags, tries)
-	if pkt.rcode() == "SERVFAIL":
-		raise Exception("%s lookup failed (server error or dnssec validation failed)" % name)
-	if pkt.rcode() == "NXDOMAIN":
-		if "AD" in pkt.flags():
-			raise Exception("%s lookup failed (non-existence proven by DNSSEC)" % hostname )
-		else:
-			raise Exception("%s lookup failed" % hostname )
-	if pkt.rcode() == "NOERROR":
-		if "AD" not in pkt.flags():
-			if not flex:
-				raise Exception("DNS lookup was insecure")
-			else:
-				warnings.warn("DNS lookup was insecure")
-		return pkt
-	else:
-		raise Exception("unknown ldns error, %s" % pkt.rcode())
-
-
 class packet:
 	
 	def _construct_rr_filter(self, **kwds):
@@ -560,7 +489,7 @@ class packet:
 	def answer(self, **filters):
 		"""Returns the answer section.
 		
-		* **filters -- a filtering mechanism
+		* filters -- a filtering mechanism
 		
 		Since a very common desire is to filter the resource records in a packet
 		section, we provide a special tool for doing this: filters. They are a
@@ -581,37 +510,30 @@ class packet:
 		, google.ca.    28      IN      A       74.125.91.106
 		]
 
-		To understand filters, comsider the following:
+		To understand filters, consider the following:
 
-		>>> res = ldnsx.resolver()
-		>>> pkt = res.query("google.ca","ANY")
+		>>> pkt = ldnsx.query("cow.com","ANY")
 		>>> pkt.answer()
-		[google.ca.     284     IN      MX      10 google.com.s9b1.psmtp.com.
-		, google.ca.    284     IN      MX      10 google.com.s9a1.psmtp.com.
-		, google.ca.    284     IN      MX      10 google.com.s9a2.psmtp.com.
-		, google.ca.    284     IN      MX      10 google.com.s9b2.psmtp.com.
-		, google.ca.    4       IN      SOA     ns1.google.com. dns-admin.google.com. 1452303 21600 3600 1209600 300
-		, google.ca.    134530  IN      NS      ns1.google.com.
-		, google.ca.    134530  IN      NS      ns2.google.com.
-		, google.ca.    134530  IN      NS      ns4.google.com.
-		, google.ca.    134530  IN      NS      ns3.google.com.
-		, google.ca.    261     IN      A       74.125.91.103
-		, google.ca.    261     IN      A       74.125.91.99
-		, google.ca.    261     IN      A       74.125.91.147
-		, google.ca.    261     IN      A       74.125.91.105
-		, google.ca.    261     IN      A       74.125.91.106
-		, google.ca.    261     IN      A       74.125.91.104
+		[cow.com.       276     IN      A       208.87.32.75
+		, cow.com.      3576    IN      NS      sell.internettraffic.com.
+		, cow.com.      3576    IN      NS      buy.internettraffic.com.
+		, cow.com.      3576    IN      SOA     buy.internettraffic.com. hostmaster.hostingnet.com. 1308785320 10800 3600 604800 3600
 		]
-		>>> pkt.answer(rr_type="NS")
-		[google.ca.     134530  IN      NS      ns1.google.com.
-		, google.ca.    134530  IN      NS      ns2.google.com.
-		, google.ca.    134530  IN      NS      ns4.google.com.
-		, google.ca.    134530  IN      NS      ns3.google.com.
+		>>> pkt.answer(rr_type="A")
+		[cow.com.       276     IN      A       208.87.32.75
+		]
+		>>> pkt.answer(rr_type="A|NS")
+		[cow.com.       276     IN      A       208.87.32.75
+		, cow.com.      3576    IN      NS      sell.internettraffic.com.
+		, cow.com.      3576    IN      NS      buy.internettraffic.com.
+		]
+		>>> pkt.answer(rr_type="!NS")
+		[cow.com.       276     IN      A       208.87.32.75
+		, cow.com.      3576    IN      SOA     buy.internettraffic.com. hostmaster.hostingnet.com. 1308785320 10800 3600 604800 3600
 		]
 		
-		fields are the same as when indexing a resource record. 
-		If you want to allow a feild to be multiple values, you may use "A|B|C.."
-		format. Using lists is depricated.
+		fields are the same as when indexing a resource record.
+		note: ordering is alphabetical.
 		"""
 		ret =  [resource_record(rr) for rr in self._ldns_pkt.answer().rrs()]
 		return filter(self._construct_rr_filter(**filters), ret)
@@ -619,13 +541,13 @@ class packet:
 	def authority(self, **filters):
 		"""Returns the authority section.
 
-		* **filters -- a filtering mechanism
+		* filters -- a filtering mechanism
 		
 		Since a very common desire is to filter the resource records in a packet
 		section, we provide a special tool for doing this: filters. They are a
 		lot like regular python filters, but more convenient. If you set a 
 		field equal to some value, you will only receive resource records for which
-		it holds true.
+		it holds true. See answer() for details.
 
 		**Examples**
 
@@ -645,13 +567,13 @@ class packet:
 	def additional(self, **filters):
 		"""Returns the additional section.
 
-		* **filters -- a filtering mechanism
+		* filters -- a filtering mechanism
 		
 		Since a very common desire is to filter the resource records in a packet
 		section, we provide a special tool for doing this: filters. They are a
 		lot like regular python filters, but more convenient. If you set a 
 		field equal to some value, you will only receive resource records for which
-		it holds true.
+		it holds true. See answer() for details.
 
 		**Examples**
 
@@ -671,13 +593,13 @@ class packet:
 	def question(self, **filters):
 		"""Returns the question section.
 
-		* **filters -- a filtering mechanism
+		* filters -- a filtering mechanism
 		
 		Since a very common desire is to filter the resource records in a packet
 		section, we provide a special tool for doing this: filters. They are a
 		lot like regular python filters, but more convenient. If you set a 
 		field equal to some value, you will only receive resource records for which
-		it holds true.
+		it holds true. See answer() for details.
 
 		"""
 		ret = [resource_record(rr) for rr in self._ldns_pkt.question().rrs()]
@@ -707,6 +629,12 @@ class resource_record:
 			return self._rdfs[self._iter_pos-1]
 		else:
 			raise StopIteration
+
+	def __len__(self):
+		try:
+			return len(_rdfs)
+		except:
+			return 0
 
 	def __getitem__(self, n):
 		if isinstance(n, int):
@@ -865,3 +793,72 @@ class resource_record:
 			return ret
 		else:
 			return []
+
+_rr_types={
+	"A"    : ldns.LDNS_RR_TYPE_A,
+	"A6"   : ldns.LDNS_RR_TYPE_A6,
+	"AAAA" : ldns.LDNS_RR_TYPE_AAAA,
+	"AFSDB": ldns.LDNS_RR_TYPE_AFSDB,
+	"ANY"  : ldns.LDNS_RR_TYPE_ANY,
+	"APL"  : ldns.LDNS_RR_TYPE_APL,
+	"ATMA" : ldns.LDNS_RR_TYPE_ATMA,
+	"AXFR" : ldns.LDNS_RR_TYPE_AXFR,
+	"CERT" : ldns.LDNS_RR_TYPE_CERT,
+	"CNAME": ldns.LDNS_RR_TYPE_CNAME,
+	"COUNT": ldns.LDNS_RR_TYPE_COUNT,
+	"DHCID": ldns.LDNS_RR_TYPE_DHCID,
+	"DLV"  : ldns.LDNS_RR_TYPE_DLV,
+	"DNAME": ldns.LDNS_RR_TYPE_DNAME,
+	"DNSKEY": ldns.LDNS_RR_TYPE_DNSKEY,
+	"DS"   : ldns.LDNS_RR_TYPE_DS,
+	"EID"  : ldns.LDNS_RR_TYPE_EID,
+	"FIRST": ldns.LDNS_RR_TYPE_FIRST,
+	"GID"  : ldns.LDNS_RR_TYPE_GID,
+	"GPOS" : ldns.LDNS_RR_TYPE_GPOS,
+	"HINFO": ldns.LDNS_RR_TYPE_HINFO,
+	"IPSECKEY": ldns.LDNS_RR_TYPE_IPSECKEY,
+	"ISDN" : ldns.LDNS_RR_TYPE_ISDN,
+	"IXFR" : ldns.LDNS_RR_TYPE_IXFR,
+	"KEY"  : ldns.LDNS_RR_TYPE_KEY,
+	"KX"   : ldns.LDNS_RR_TYPE_KX,
+	"LAST" : ldns.LDNS_RR_TYPE_LAST,
+	"LOC"  : ldns.LDNS_RR_TYPE_LOC,
+	"MAILA": ldns.LDNS_RR_TYPE_MAILA,
+	"MAILB": ldns.LDNS_RR_TYPE_MAILB,
+	"MB"   : ldns.LDNS_RR_TYPE_MB,
+	"MD"   : ldns.LDNS_RR_TYPE_MD,
+	"MF"   : ldns.LDNS_RR_TYPE_MF,
+	"MG"   : ldns.LDNS_RR_TYPE_MG,
+	"MINFO": ldns.LDNS_RR_TYPE_MINFO,
+	"MR"   : ldns.LDNS_RR_TYPE_MR,
+	"MX"   : ldns.LDNS_RR_TYPE_MX,
+	"NAPTR": ldns.LDNS_RR_TYPE_NAPTR,
+	"NIMLOC": ldns.LDNS_RR_TYPE_NIMLOC,
+	"NS"   : ldns.LDNS_RR_TYPE_NS,
+	"NSAP" : ldns.LDNS_RR_TYPE_NSAP,
+	"NSAP_PTR" : ldns.LDNS_RR_TYPE_NSAP_PTR,
+	"NSEC" : ldns.LDNS_RR_TYPE_NSEC,
+	"NSEC3": ldns.LDNS_RR_TYPE_NSEC3,
+	"NSEC3PARAMS" : ldns.LDNS_RR_TYPE_NSEC3PARAMS,
+	"NULL" : ldns.LDNS_RR_TYPE_NULL,
+	"NXT"  : ldns.LDNS_RR_TYPE_NXT,
+	"OPT"  : ldns.LDNS_RR_TYPE_OPT,
+	"PTR"  : ldns.LDNS_RR_TYPE_PTR,
+	"PX"   : ldns.LDNS_RR_TYPE_PX,
+	"RP"   : ldns.LDNS_RR_TYPE_RP,
+	"RRSIG": ldns.LDNS_RR_TYPE_RRSIG,
+	"RT"   : ldns.LDNS_RR_TYPE_RT,
+	"SIG"  : ldns.LDNS_RR_TYPE_SIG,
+	"SINK" : ldns.LDNS_RR_TYPE_SINK,
+	"SOA"  : ldns.LDNS_RR_TYPE_SOA,
+	"SRV"  : ldns.LDNS_RR_TYPE_SRV,
+	"SSHFP": ldns.LDNS_RR_TYPE_SSHFP,
+	"TSIG" : ldns.LDNS_RR_TYPE_TSIG,
+	"TXT"  : ldns.LDNS_RR_TYPE_TXT,
+	"UID"  : ldns.LDNS_RR_TYPE_UID,
+	"UINFO": ldns.LDNS_RR_TYPE_UINFO,
+	"UNSPEC": ldns.LDNS_RR_TYPE_UNSPEC,
+	"WKS"  : ldns.LDNS_RR_TYPE_WKS,
+	"X25"  : ldns.LDNS_RR_TYPE_X25
+}
+

@@ -13,19 +13,39 @@ ldnsx aims to fix this. It wraps around the ldns python bindings,
 working around its limitations and providing a well-documented, more
 pythonistic interface.
 
-Contents:
+Reference
+=========
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    
    api/ldnsx
 
-* .. toctree::
-   :maxdepth: 1
+.. toctree::
+   :maxdepth: 2
 
    api/resolver
    api/packet
    api/resource_record
+
+Examples
+========
+
+Examples translated from ldns examples:
+
+.. toctree::
+   :maxdepth: 1
+
+   examples/ldnsx-axfr
+   examples/ldnsx-dnssec
+   examples/ldnsx-mx1
+   examples/ldnsx-mx2
+
+Others:
+.. toctree::
+   :maxdepth: 1
+
+   examples/ldnsx-walk
 
 
 Indices and tables

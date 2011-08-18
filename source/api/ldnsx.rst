@@ -2,6 +2,7 @@ LDNSX API Reference
 ===================
 
 ..	automodule:: ldnsx
+	:members: query, get_rrs, secure_query
 
 Classes
 -------

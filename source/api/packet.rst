@@ -1,10 +1,6 @@
 Class packet
 ==============
 
-..	automodule:: ldnsx
-
-Class packet
--------------
-.. autoclass:: packet
+.. autoclass:: ldnsx.packet
 	:members:
 	:undoc-members:

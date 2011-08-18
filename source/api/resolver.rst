@@ -1,10 +1,6 @@
 Class resolver
 ===============
 
-..	automodule:: ldnsx
-
-Class resolver
-------------------------------
-.. autoclass:: resolver
+.. autoclass:: ldnsx.resolver
 	:members:
 	:undoc-members:
