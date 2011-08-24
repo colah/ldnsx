@@ -71,19 +71,32 @@ def isValidIP(ipaddr):
 
 def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, res=None):
 	"""Convenience function. Creates a resolver and then queries it. Refer to resolver.query() """
-	res = resolver(res)
+	if isinstance(res, list) or isinstance(res, tuple):
+		res = resolver(*res)
+	elif isinstance(res, dict):
+		res = resolver(**res)
+	else:
+		res = resolver(res)
 	return res.query(name, rr_type, rr_class, flags, tries)
 
 def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, res=None, **kwds):
 	"""Convenience function. Gets RRs for name of type rr_type trying tries times. 
 	   If strict, it raises and exception on failure, otherwise it returns []. """
-	res = resolver(res)
+	if isinstance(res, list) or isinstance(res, tuple):
+		res = resolver(*res)
+	elif isinstance(res, dict):
+		res = resolver(**res)
+	else:
+		res = resolver(res)
 	if "|" in rr_type:
 		pkt = res.query(name, "ANY", rr_class=rr_class, tries=tries)
 	else:
 		pkt = res.query(name, rr_type, rr_class=rr_class, tries=tries)
 	if pkt:
-		return pkt.answer(rr_type=rr_type, **kwds)
+		if rr_type in ["", "ANY", "*"]:
+			return pkt.answer( **kwds)
+		else:
+			return pkt.answer(rr_type=rr_type, **kwds)
 	else:
 		if strict:
 			raise Exception("LDNS couldn't complete query")
@@ -91,7 +104,12 @@ def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, res=None, *
 			return []
 
 def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=False, res=None):
-	res = resolver(res, dnssec=True)
+	if isinstance(res, list) or isinstance(res, tuple):
+		res = resolver(*res)
+	elif isinstance(res, dict):
+		res = resolver(**res)
+	else:
+		res = resolver(res)
 	pkt = res.query(name, rr_type, rr_class, flags, tries)
 	if pkt.rcode() == "SERVFAIL":
 		raise Exception("%s lookup failed (server error or dnssec validation failed)" % name)
