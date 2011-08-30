@@ -315,7 +315,7 @@ class resolver:
 					self = resolver( ",".join(self.nameservers_ip()),tcp=True)
 					self.autotcp = True
 					pkt = self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
-					self.set_tcp(False)
+					self._ldns_resolver.set_usevc(False)
 					return pkt
 				else:
 					self = resolver( ",".join(self.nameservers_ip()) )
