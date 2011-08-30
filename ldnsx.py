@@ -59,7 +59,7 @@ except ImportError:
 	print >> sys.stderr, "openSUSE: zypper in python-ldns"
 	sys.exit(1)
 
-__version__ = "-0.5"
+__version__ = "0.1"
 
 def isValidIP(ipaddr):
 	try:
@@ -177,11 +177,10 @@ class resolver:
 			;; WHEN: Fri Jun  3 11:01:02 2011
 			;; MSG SIZE  rcvd: 41
 
-
 	
 			"""
 	
-	def __init__(self, ns = None, dnssec = False, tcp = False, port = 53):
+	def __init__(self, ns = None, dnssec = False, tcp = 'auto', port = 53):
 		"""resolver constructor
 			
 			* ns    --  the nameserver/comma delimited nameserver list
@@ -204,7 +203,12 @@ class resolver:
 			for nm in nm_list:
 				self.add_nameserver(nm)
 		self.set_dnssec(dnssec)
-		self._ldns_resolver.set_usevc(tcp)
+		if tcp == 'auto':
+			self.autotcp = False
+			self._ldns_resolver.set_usevc(tcp)
+		else:
+			self.autotcp = True
+			self._ldns_resolver.set_usevc(False)
 		self._ldns_resolver.set_port(port)
 
 	
@@ -299,9 +303,29 @@ class resolver:
 			if tries <= 1:
 				return None
 			else:
-				time.sleep(1)
-				self = resolver( ",".join(self.nameservers_ip()) )
-				return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
+				# One of the major causes of none-packets is truncation of packets
+				# When autotcp is set, we are in a flexible enough position to try and use tcp
+				# to get around this.
+				# Either way, we want to replace the resolver, since resolvers will sometimes
+				# just freeze up.
+				if self.autotcp:
+					self = resolver( ",".join(self.nameservers_ip()),tcp=True)
+					self.autotcp = True
+					pkt = self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
+					self.set_tcp(False)
+					return pkt
+				else:
+					self = resolver( ",".join(self.nameservers_ip()) )
+					time.sleep(1) # It could be that things are failing because of a brief outage
+					return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
+		elif self.autotcp:
+			pkt = packet(pkt)
+			if "TR" in pkt.flags():
+				self._ldns_resolver.set_usevc(True)
+				pkt2 = self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
+				self._ldns_resolver.set_usevc(False)
+				if pkt2: return packet(pkt2)
+			return pkt	
 		return packet(pkt)
 		#ret = []
 		#for rr in pkt.answer().rrs():
