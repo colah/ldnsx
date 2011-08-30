@@ -187,6 +187,9 @@ class resolver:
 			            defaults to settings from /etc/resolv.conf
 			* dnssec -- should the resolver try and use dnssec or not?
 		    * tcp -- should the resolve try to connect with TCP? 
+		             'auto' tries without tcp, and falls back to it
+		             to work around both ldns choking on truncated packets
+		             and nameservers that don't support tcp.
 		    * port -- the port to use, must be the same for all nameservers
 
 			"""
