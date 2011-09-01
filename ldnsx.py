@@ -69,8 +69,14 @@ def isValidIP(ipaddr):
 	except:
 		return 0
 
-def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, res=None):
-	"""Convenience function. Creates a resolver and then queries it. Refer to resolver.query() """
+def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 3, res=None):
+	"""Convenience function. Creates a resolver and then queries it. Refer to resolver.query() 
+	   * name -- domain to query for 
+	   * rr_type -- rr_type to query for
+	   * flags -- flags for query (list of strings)
+	   * tries -- number of times to retry the query on failure
+	   * res -- configurations for the resolver as a dict -- see resolver()
+	   """
 	if isinstance(res, list) or isinstance(res, tuple):
 		res = resolver(*res)
 	elif isinstance(res, dict):
@@ -81,7 +87,15 @@ def query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, res=None):
 
 def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, res=None, **kwds):
 	"""Convenience function. Gets RRs for name of type rr_type trying tries times. 
-	   If strict, it raises and exception on failure, otherwise it returns []. """
+	   If strict, it raises and exception on failure, otherwise it returns []. 
+	   * name -- domain to query for 
+	   * rr_type -- rr_type to query for
+	   * flags -- flags for query (list of strings)
+	   * tries -- number of times to retry the query on failure
+	   * strict -- if the query fails, do we return [] or raise an exception?
+	   * res -- configurations for the resolver as a dict -- see resolver()
+	   * kwds -- query filters, refer to packet.answer()
+       """
 	if isinstance(res, list) or isinstance(res, tuple):
 		res = resolver(*res)
 	elif isinstance(res, dict):
@@ -104,6 +118,13 @@ def get_rrs(name, rr_type, rr_class="IN", tries = 3, strict = False, res=None, *
 			return []
 
 def secure_query(name, rr_type, rr_class="IN", flags=["RD"], tries = 1, flex=False, res=None):
+	"""Convenience function. Creates a resolver and then does a DNSSEC query. Refer to resolver.query() 
+	   * name -- domain to query for 
+	   * rr_type -- rr_type to query for
+	   * flags -- flags for query (list of strings)
+	   * tries -- number of times to retry the query on failure
+	   * flex -- if we can't verify data, exception or warning?
+	   * res -- configurations for the resolver as a dict -- see resolver()"""
 	if isinstance(res, list) or isinstance(res, tuple):
 		res = resolver(*res)
 	elif isinstance(res, dict):
@@ -205,6 +226,7 @@ class resolver:
 			nm_list.reverse()
 			for nm in nm_list:
 				self.add_nameserver(nm)
+		# Configure DNSSEC, tcp and port
 		self.set_dnssec(dnssec)
 		if tcp == 'auto':
 			self.autotcp = False
@@ -271,6 +293,7 @@ class resolver:
 			determine what rr_type menmonics we support, please refer to resolver.supported_rr_types()
 
 		"""
+		# Determine rr_type int
 		if rr_type in _rr_types.keys():
 			_rr_type = _rr_types[rr_type]
 		elif isinstance(rr_type,int):
@@ -282,11 +305,13 @@ class resolver:
 				raise Exception("%s is a bad RR type. TYPEXXXX: XXXX must be a number")
 		else:
 			raise Exception("ldnsx (version %s) does not support the RR type %s."  % (__version__, str(rr_type)) ) 
+		# Determine rr_class int
 		if   rr_class == "IN": _rr_class = ldns.LDNS_RR_CLASS_IN 
 		elif rr_class == "CH": _rr_class = ldns.LDNS_RR_CLASS_CH
 		elif rr_class == "HS": _rr_class = ldns.LDNS_RR_CLASS_HS
 		else:
 			raise Exception("ldnsx (version %s) does not support the RR class %s." % (__version__, str(rr_class)) ) 
+		# Determine flags int
 		_flags = 0
 		if "QR" in flags:  _flags |= ldns.LDNS_QR
 		if "AA" in flags:  _flags |= ldns.LDNS_AA
@@ -295,6 +320,7 @@ class resolver:
 		if "CD" in flags:  _flags |= ldns.LDNS_CD
 		if "RA" in flags:  _flags |= ldns.LDNS_RA
 		if "AD" in flags:  _flags |= ldns.LDNS_AD
+		# Query
 		if tries == 0: return None
 		try:
 			pkt = self._ldns_resolver.query(name, _rr_type, _rr_class, _flags)
@@ -302,6 +328,7 @@ class resolver:
 			raise
 		except: #Since the ldns exceptiion is not very descriptive...
 			raise Exception("ldns backend ran into problems. Likely, the name you were querying for, %s, was invalid." % name)
+		#Deal with failed queries
 		if not pkt:
 			if tries <= 1:
 				return None
@@ -323,7 +350,7 @@ class resolver:
 					return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
 		elif self.autotcp:
 			pkt = packet(pkt)
-			if "TR" in pkt.flags():
+			if "TC" in pkt.flags():
 				self._ldns_resolver.set_usevc(True)
 				pkt2 = self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
 				self._ldns_resolver.set_usevc(False)
