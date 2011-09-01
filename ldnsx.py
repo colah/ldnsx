@@ -229,11 +229,11 @@ class resolver:
 		# Configure DNSSEC, tcp and port
 		self.set_dnssec(dnssec)
 		if tcp == 'auto':
-			self.autotcp = False
-			self._ldns_resolver.set_usevc(tcp)
-		else:
 			self.autotcp = True
 			self._ldns_resolver.set_usevc(False)
+		else:
+			self.autotcp = False
+			self._ldns_resolver.set_usevc(tcp)
 		self._ldns_resolver.set_port(port)
 
 	
@@ -355,7 +355,7 @@ class resolver:
 				pkt2 = self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
 				self._ldns_resolver.set_usevc(False)
 				if pkt2: return packet(pkt2)
-			return pkt	
+			return pkt
 		return packet(pkt)
 		#ret = []
 		#for rr in pkt.answer().rrs():
