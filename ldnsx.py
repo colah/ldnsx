@@ -339,13 +339,13 @@ class resolver:
 				# Either way, we want to replace the resolver, since resolvers will sometimes
 				# just freeze up.
 				if self.autotcp:
-					self = resolver( ",".join(self.nameservers_ip()),tcp=True)
+					self = resolver( ",".join(self.nameservers_ip()),tcp=True, dnssec = self._ldns_resolver.dnssec())
 					self.autotcp = True
 					pkt = self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
 					self._ldns_resolver.set_usevc(False)
 					return pkt
 				else:
-					self = resolver( ",".join(self.nameservers_ip()) )
+					self = resolver( ",".join(self.nameservers_ip()), tcp = self._ldns_resolver.usevc(), dnssec = self._ldns_resolver.dnssec() )
 					time.sleep(1) # It could be that things are failing because of a brief outage
 					return self.query(name, rr_type, rr_class=rr_class, flags=flags, tries = tries-1) 
 		elif self.autotcp:
