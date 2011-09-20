@@ -201,16 +201,14 @@ class resolver:
 	
 			"""
 	
-	def __init__(self, ns = None, dnssec = False, tcp = 'auto', port = 53):
+	def __init__(self, ns = None, dnssec = False, tcp = False, port = 53):
 		"""resolver constructor
 			
 			* ns    --  the nameserver/comma delimited nameserver list
 			            defaults to settings from /etc/resolv.conf
 			* dnssec -- should the resolver try and use dnssec or not?
-		    * tcp -- should the resolve try to connect with TCP? 
-		             'auto' tries without tcp, and falls back to it
-		             to work around both ldns choking on truncated packets
-		             and nameservers that don't support tcp.
+		    * tcp -- should the resolver use TCP
+		             'auto' is a depricated work around for old ldns problems
 		    * port -- the port to use, must be the same for all nameservers
 
 			"""
