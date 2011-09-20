@@ -1,5 +1,5 @@
-#!/usr/bin/python
 # (c) Christopher Olah <colah@xelerance.com>, 2011. Xelerance <http://www.xelerance.com/>.
+# License: BSD
 
 """ Easy DNS (including DNSSEC) via ldns.
 
