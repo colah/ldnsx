@@ -1,5 +1,5 @@
-# (c) Christopher Olah <colah@xelerance.com>
-# 2011. Xelerance Corp. <http://www.xelerance.com/>.
+# Copyright (C) Xelerance Corp. <http://www.xelerance.com/>.
+# Author: Christopher Olah <colah@xelerance.com>
 # License: BSD
 
 """ Easy DNS (including DNSSEC) via ldns.
