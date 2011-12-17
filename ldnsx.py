@@ -830,19 +830,21 @@ class resource_record:
 		else:
 			return -1
 
-	def flags(self):
+	def flags(self, number = False):
 		"""Return RR flags for DNSKEY """
 		t = self.rr_type() 
 		if t == "DNSKEY":
 			ret = []
 			n = int(self[4])
-			for m in range(1):
-				if 2**(15-m) & n:
-					if   m == 7: ret.append("ZONE")
-					elif m == 8: ret.append("REVOKE")
-					elif m ==15: ret.append("SEP")
-					else:        ret.append(m)
-			return ret
+			if number:
+				return n
+			else:
+				for m in range(16):
+					if 2**(15-m) & n:
+						if   m == 7: ret.append("ZONE")
+						elif m == 8: ret.append("REVOKE")
+						elif m ==15: ret.append("SEP")
+						else:        ret.append(m)
 		else:
 			return []
 
