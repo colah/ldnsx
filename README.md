@@ -10,7 +10,7 @@ ldnsx aims to fix this. It wraps around the ldns python bindings,
 working around its limitations and providing a well-documented, more
 pythonistic interface.
 
-Written by Christopher Olah <chris@xelerance.com>
+Written by Christopher Olah <chris@colah.ca>
 
 Examples
 ========
