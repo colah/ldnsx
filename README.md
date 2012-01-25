@@ -1,4 +1,5 @@
-LDNSX: Easy DNS (including DNSSEC) via ldns.
+LDNSX: Easy DNS (including DNSSEC) via ldns
+===========================================
 
 TL;DR: Working with DNS should't be terrifying.
 
@@ -12,7 +13,7 @@ ldnsx aims to fix this. It wraps around the ldns python bindings,
 working around its limitations and providing a well-documented, more
 pythonistic interface.
 
-Written by Christopher Olah <chris@colah.ca>, partly in the employment of Xelerance.
+Written by Christopher Olah (chris@colah.ca), partly in the employment of Xelerance.
 
 Examples
 ========
